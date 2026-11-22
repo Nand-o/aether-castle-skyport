@@ -1,0 +1,64 @@
+# =============================================================================
+# .gitignore — aether-castle-skyport
+# =============================================================================
+
+# --- AI assistant files (local only, never committed) ------------------------
+# The team's CLAUDE.md lives outside the repo (in "Project Akhir/"); these
+# lines are a safety net in case a copy ends up in here.
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+.claude/
+.gemini/
+.agents/
+.cursor/
+.cursorrules
+.windsurfrules
+.continue/
+.aider*
+.github/copilot-instructions.md
+
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# --- Virtual environments & secrets -----------------------------------------
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# --- Runtime output ---------------------------------------------------------
+# CSV telemetry from the L key
+logs/
+# raylib screenshots (F12 by default)
+screenshot*.png
+
+# --- Demo recordings (submit separately, never commit) ----------------------
+*.mp4
+*.mkv
+*.mov
+*.avi
+
+# --- Editors / IDEs ---------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+
+# --- Operating systems ------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+.DS_Store
