@@ -1,4 +1,4 @@
-# [AI] Claude, 2026-11-23: module docstring (W1); reviewed by Nando: pending
+# [AI] Claude, 2026-11-23: module docstring (W1, W2); reviewed by Nando: pending
 """
 world_scene.py - dunia statis Aether Castle Skyport: pulau, kastil, menara, tiang, dermaga, langit, kamera.
 PJ: Nando. Hanya primitif raylib (kubus, silinder, kerucut, bola); tidak ada kode simulasi di sini.
@@ -6,6 +6,8 @@ Koordinat dari tabel landmark brief §4.4: +Y ke atas, +X timur, -Z utara, 1 uni
 Nilai bertanda ◇ dibawa dari brief v2 dan harus dicek dengan prototipe; perubahan diumumkan ke semua PJ.
 
 W1: konstanta landmark + kamera orbit + penampil penanda (wireframe) untuk mengecek posisi sebelum dimodelkan.
+W2: pulau padat (5 silinder bertumpuk), keep beratap pelana, menara sudut beratap kerucut, menara bendera + tiang,
+    menara gerbang dengan mangkuk anglo (hiasan) dan ambang gerbang.
 
 Jalankan:  python world_scene.py
 Kontrol :  kiri/kanan putar kamera
@@ -43,6 +45,32 @@ TIANG_DERMAGA_TINGGI = 8.0               # pier mast top ◇
 TIANG_PENNANT = (31.0, 8.0, 3.0)         # pennant pin point (Tier 2); must equal the pennant's TIANG
 
 PULAU_R = 32.0                           # island radius - MY ESTIMATE: corner towers reach r ≈ 31.1 m; range 31..36
+
+# ---------- Bentuk padat (W2) ----------
+# [AI] Claude, 2026-11-23: shape choices for the solid models - MY CHOICES, not in the brief unless marked;
+#      reviewed by Nando: pending
+# The island is a stack of cylinders: (y_bottom, y_top, radius_bottom, radius_top, colour key).
+# Row 0 is the grassy plateau (top at y = 0); the rest is the rocky underbelly that tapers to a point,
+# so the island reads as floating from any angle (brief §4.2 rule 2).
+PULAU_LAPISAN = [
+    (-1.5, 0.0, PULAU_R, PULAU_R, "rumput"),
+    (-8.0, -1.5, 27.0, PULAU_R, "tanah1"),
+    (-16.0, -8.0, 19.0, 27.0, "tanah2"),
+    (-25.0, -16.0, 10.0, 19.0, "tanah1"),
+    (-34.0, -25.0, 0.0, 10.0, "tanah2"),
+]
+KEEP_DINDING = 14.0                      # m, height of the keep walls; the gable roof rises from here to KEEP_ATAP
+MENARA_SUDUT_BADAN = 16.0                # m, corner tower body height; the cone roof goes up to MENARA_SUDUT_TINGGI
+MENARA_SUDUT_ATAP_R = 3.4                # m, cone roof radius (a little wider than the tower = overhang)
+GERBANG_LINTEL = (6.0, 10.0)             # m, bottom and top of the stone lintel between the two gate towers
+TIANG_R = 0.15                           # m, flagpole radius
+WARNA = {                                # flat colours (brief §4.2 rule 5: no shaders)
+    "rumput": rl.Color(96, 140, 72, 255), "tanah1": rl.Color(122, 96, 70, 255), "tanah2": rl.Color(98, 78, 58, 255),
+    "batu": rl.Color(168, 166, 158, 255), "batu_gelap": rl.Color(128, 126, 120, 255),
+    "atap": rl.Color(150, 58, 44, 255), "atap_gelap": rl.Color(118, 44, 34, 255),
+    "tiang": rl.Color(60, 60, 60, 255), "anglo": rl.Color(70, 50, 40, 255),
+}
+TAMPILKAN_PENANDA = True                 # also draw the W1 wireframe markers on top (to check alignment)
 
 # ---------- Kamera ----------
 # [AI] Claude, 2026-11-23: camera parameters (brief §4.3); reviewed by Nando: pending
@@ -111,12 +139,65 @@ def gambar_penanda():
     rl.draw_line_3d(v3((0, 0, 0)), v3((0, 10, 0)), rl.GREEN)
     rl.draw_line_3d(v3((0, 0, 0)), v3((0, 0, 10)), rl.BLUE)
 
+# ---------- Model padat (W2) ----------
+# [AI] Claude, 2026-11-23: solid models from raylib primitives (brief §4.2); everything is drawn from the constants
+#      above, nothing is computed per frame except the draw calls. reviewed by Nando: pending
+def segitiga_dua_sisi(a, b, c, warna):
+    """One triangle visible from both sides: drawn twice with opposite windings (only used for the few roof
+    triangles, so the cheap trick is fine here; the banner uses the culling-off method instead)."""
+    rl.draw_triangle_3d(v3(a), v3(b), v3(c), warna)
+    rl.draw_triangle_3d(v3(a), v3(c), v3(b), warna)
+
+def gambar_pulau():
+    """Floating island: stacked cylinders from PULAU_LAPISAN (draw_cylinder starts at the bottom and goes up)."""
+    for y0, y1, r0, r1, kunci in PULAU_LAPISAN:
+        rl.draw_cylinder(v3((0.0, y0, 0.0)), r1, r0, y1 - y0, 24, WARNA[kunci])
+
+def gambar_keep():
+    """Main keep: a box for the walls and a gable roof (ridge along x) from 8 triangles."""
+    kx, kz = KEEP_PUSAT
+    w, d = KEEP_UKURAN
+    rl.draw_cube(v3((kx, KEEP_DINDING / 2, kz)), w, KEEP_DINDING, d, WARNA["batu"])
+    x0, x1, z0, z1, y0, y1 = kx - w / 2, kx + w / 2, kz - d / 2, kz + d / 2, KEEP_DINDING, KEEP_ATAP
+    # the four eave corners and the two ends of the ridge
+    a, b, c, e = (x0, y0, z0), (x1, y0, z0), (x1, y0, z1), (x0, y0, z1)
+    p, q = (x0, y1, kz), (x1, y1, kz)
+    for tri, kunci in (((a, b, q), "atap"), ((a, q, p), "atap"),               # north slope
+                       ((e, c, q), "atap_gelap"), ((e, q, p), "atap_gelap"),   # south slope (darker = simple tint)
+                       ((a, e, p), "batu_gelap"), ((b, c, q), "batu_gelap")):  # the two gable ends
+        segitiga_dua_sisi(*tri, WARNA[kunci])
+
+def gambar_menara():
+    """Corner towers with cone roofs, the banner spire with its pole, and the gate towers with brazier bowls."""
+    for x, z in MENARA_SUDUT:
+        rl.draw_cylinder(v3((x, 0.0, z)), MENARA_SUDUT_R, MENARA_SUDUT_R, MENARA_SUDUT_BADAN, 12, WARNA["batu"])
+        rl.draw_cylinder(v3((x, MENARA_SUDUT_BADAN, z)), 0.0, MENARA_SUDUT_ATAP_R,
+                         MENARA_SUDUT_TINGGI - MENARA_SUDUT_BADAN, 12, WARNA["atap"])
+    sx, sz = SPIRE_PUSAT
+    rl.draw_cylinder(v3((sx, 0.0, sz)), SPIRE_R, SPIRE_R, SPIRE_TINGGI, 16, WARNA["batu"])
+    rl.draw_cylinder(v3((sx, SPIRE_TINGGI - 1.5, sz)), SPIRE_R + 0.5, SPIRE_R + 0.5, 1.5, 16, WARNA["batu_gelap"])
+    rl.draw_cylinder_ex(v3((sx, SPIRE_TINGGI, sz)), v3((sx, TIANG_PUNCAK, sz)), TIANG_R, TIANG_R, 8, WARNA["tiang"])
+    for x, z in GERBANG:
+        rl.draw_cylinder(v3((x, 0.0, z)), GERBANG_R, GERBANG_R, GERBANG_TINGGI, 12, WARNA["batu_gelap"])
+        rl.draw_cylinder(v3((x, GERBANG_TINGGI, z)), 1.2, 0.8, 0.6, 10, WARNA["anglo"])   # brazier bowl (decoration)
+    # stone lintel over the gate, between the inner faces of the two gate towers
+    (gx0, gz), (gx1, _) = GERBANG
+    ly0, ly1 = GERBANG_LINTEL
+    rl.draw_cube(v3(((gx0 + gx1) / 2, (ly0 + ly1) / 2, gz)), (gx1 - gx0) - 2 * GERBANG_R + 1.0, ly1 - ly0, 2.0,
+                 WARNA["batu_gelap"])
+
+def gambar_dunia():
+    """Everything static in the world. Call inside rl.begin_mode_3d(kamera.cam) - main.py does the same."""
+    gambar_pulau()
+    gambar_keep()
+    gambar_menara()
+
 # ---------- Program mandiri ----------
-# [AI] Claude, 2026-11-23: standalone viewer for W1; reviewed by Nando: pending
+# [AI] Claude, 2026-11-23: standalone viewer (W1, W2: solids + optional markers); reviewed by Nando: pending
 LEBAR, TINGGI = 1280, 720                # window size in pixels (assignment target 1280 x 720)
 
 def main():
-    rl.init_window(LEBAR, TINGGI, "world_scene - penanda landmark (W1)")
+    rl.init_window(LEBAR, TINGGI, "world_scene - pulau dan kastil (W2)")
     rl.set_target_fps(60)
     kamera = Kamera()
     while not rl.window_should_close():
@@ -124,10 +205,11 @@ def main():
         rl.begin_drawing()
         rl.clear_background(rl.RAYWHITE)
         rl.begin_mode_3d(kamera.cam)
-        rl.draw_grid(100, 1.0)                       # 1 m grid, 100 m wide, on y = 0
-        gambar_penanda()
+        gambar_dunia()
+        if TAMPILKAN_PENANDA:
+            gambar_penanda()
         rl.end_mode_3d()
-        rl.draw_text("world_scene W1 - penanda landmark (brief §4.4)", 20, 16, 20, rl.DARKGRAY)
+        rl.draw_text("world_scene W2 - pulau, keep, menara (brief §4.2, §4.4)", 20, 16, 20, rl.DARKGRAY)
         rl.draw_text("merah = TIANG bendera   oranye = TIANG pennant   biru = tambat (WP0)   hijau = tepi pulau",
                      20, 44, 18, rl.GRAY)
         rl.draw_text(f"kamera: sudut {math.degrees(kamera.sudut) % 360:.0f} deg, "
