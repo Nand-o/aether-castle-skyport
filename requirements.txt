@@ -1,0 +1,4 @@
+# Pinned to the demo laptop (HP Victus 15, Python 3.13.0), checked 2026-11-22.
+# [AI] Claude, 2026-11-22: versions copied from `pip freeze` on the Victus; reviewed by Nando: pending
+raylib==6.0.1.0
+numpy==2.3.5
