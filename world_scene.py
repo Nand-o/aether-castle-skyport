@@ -1,4 +1,4 @@
-# [AI] Claude, 2026-11-23: module docstring (W1, W2); reviewed by Nando: pending
+# [AI] Claude, 2026-11-23: module docstring (W1-W3); reviewed by Nando: pending
 """
 world_scene.py - dunia statis Aether Castle Skyport: pulau, kastil, menara, tiang, dermaga, langit, kamera.
 PJ: Nando. Hanya primitif raylib (kubus, silinder, kerucut, bola); tidak ada kode simulasi di sini.
@@ -8,6 +8,10 @@ Nilai bertanda ◇ dibawa dari brief v2 dan harus dicek dengan prototipe; peruba
 W1: konstanta landmark + kamera orbit + penampil penanda (wireframe) untuk mengecek posisi sebelum dimodelkan.
 W2: pulau padat (5 silinder bertumpuk), keep beratap pelana, menara sudut beratap kerucut, menara bendera + tiang,
     menara gerbang dengan mangkuk anglo (hiasan) dan ambang gerbang.
+W3: dermaga + tiang penyangga + patok tambat, tiang pennant, warna langit, awan, dan get_landmarks() untuk main.py.
+
+Dipakai main.py:  kamera = Kamera(); tiap frame kamera.update(); rl.clear_background(LANGIT);
+                  di dalam rl.begin_mode_3d(kamera.cam): gambar_dunia(); lm = get_landmarks() sekali di awal.
 
 Jalankan:  python world_scene.py
 Kontrol :  kiri/kanan putar kamera
@@ -69,8 +73,26 @@ WARNA = {                                # flat colours (brief §4.2 rule 5: no 
     "batu": rl.Color(168, 166, 158, 255), "batu_gelap": rl.Color(128, 126, 120, 255),
     "atap": rl.Color(150, 58, 44, 255), "atap_gelap": rl.Color(118, 44, 34, 255),
     "tiang": rl.Color(60, 60, 60, 255), "anglo": rl.Color(70, 50, 40, 255),
+    "kayu": rl.Color(146, 104, 66, 255), "kayu_gelap": rl.Color(104, 72, 46, 255), "awan": rl.Color(246, 248, 252, 255),
 }
-TAMPILKAN_PENANDA = True                 # also draw the W1 wireframe markers on top (to check alignment)
+TAMPILKAN_PENANDA = False                # True = also draw the W1 wireframe markers on top (to check alignment)
+
+# ---------- Dermaga, langit, awan (W3) ----------
+# [AI] Claude, 2026-11-23: pier details, sky and clouds - MY CHOICES, not in the brief; reviewed by Nando: pending
+DERMAGA_TEBAL = 0.5                      # m, deck thickness (deck top at DERMAGA_Y)
+DERMAGA_PENYANGGA = [(33.0, -3.5), (33.0, 3.5), (39.0, -3.5), (39.0, 3.5)]   # support posts (x, z) under the deck
+DERMAGA_PENYANGGA_BAWAH = -4.0           # m, the posts hang down to here (the pier sticks out past the island edge)
+PATOK_TAMBAT = [(38.0, -3.6), (38.0, 3.6)]   # mooring bollards (x, z) on the deck, beside the berth WP0
+TIANG_DERMAGA_R = 0.12                   # m, pier mast radius
+LANGIT = rl.Color(178, 214, 240, 255)    # sky = clear colour of the window (main.py uses it too)
+# clouds: (x, y, z, size in m). They sit on a ring ~130 m from the centre, beyond the camera's 100 m orbit,
+# so a cloud is either behind the island (visible) or behind the camera (invisible) - it never blocks the view.
+AWAN = [(-120.0, 30.0, -60.0, 9.0), (60.0, 40.0, -118.0, 11.0), (125.0, -15.0, 40.0, 10.0),
+        (-40.0, -25.0, 124.0, 12.0), (-128.0, 5.0, 45.0, 8.0)]
+# each cloud is 3 low-poly spheres; built once here, not every frame: (centre Vector3, radius)
+AWAN_BOLA = [(rl.Vector3(x + dx * s, y + dy * s, z + dz * s), f * s)
+             for x, y, z, s in AWAN
+             for dx, dy, dz, f in ((0.0, 0.0, 0.0, 1.0), (0.9, -0.2, 0.0, 0.7), (-0.9, -0.25, 0.3, 0.6))]
 
 # ---------- Kamera ----------
 # [AI] Claude, 2026-11-23: camera parameters (brief §4.3); reviewed by Nando: pending
@@ -186,32 +208,75 @@ def gambar_menara():
     rl.draw_cube(v3(((gx0 + gx1) / 2, (ly0 + ly1) / 2, gz)), (gx1 - gx0) - 2 * GERBANG_R + 1.0, ly1 - ly0, 2.0,
                  WARNA["batu_gelap"])
 
+# [AI] Claude, 2026-11-23: W3 pier and clouds; reviewed by Nando: pending
+def gambar_dermaga():
+    """East pier: wooden deck, support posts under it, two mooring bollards at the berth, and the pennant mast."""
+    x0, x1 = DERMAGA_X
+    z0, z1 = DERMAGA_Z
+    rl.draw_cube(v3(((x0 + x1) / 2, DERMAGA_Y - DERMAGA_TEBAL / 2, (z0 + z1) / 2)), x1 - x0, DERMAGA_TEBAL, z1 - z0,
+                 WARNA["kayu"])
+    alas = DERMAGA_Y - DERMAGA_TEBAL                  # underside of the deck
+    for x, z in DERMAGA_PENYANGGA:
+        rl.draw_cylinder(v3((x, DERMAGA_PENYANGGA_BAWAH, z)), 0.3, 0.3, alas - DERMAGA_PENYANGGA_BAWAH, 8,
+                         WARNA["kayu_gelap"])
+    for x, z in PATOK_TAMBAT:
+        rl.draw_cylinder(v3((x, DERMAGA_Y, z)), 0.25, 0.3, 0.8, 8, WARNA["kayu_gelap"])
+    mx, mz = TIANG_DERMAGA
+    rl.draw_cylinder_ex(v3((mx, DERMAGA_Y, mz)), v3((mx, TIANG_DERMAGA_TINGGI + 0.5, mz)), TIANG_DERMAGA_R,
+                        TIANG_DERMAGA_R, 8, WARNA["tiang"])
+
+def gambar_awan():
+    """Clouds: low-poly spheres (8 rings x 10 slices) from the list built once in AWAN_BOLA."""
+    for pusat, r in AWAN_BOLA:
+        rl.draw_sphere_ex(pusat, r, 8, 10, WARNA["awan"])
+
+# [AI] Claude, 2026-11-23: W1-W3 draw order; reviewed by Nando: pending
 def gambar_dunia():
     """Everything static in the world. Call inside rl.begin_mode_3d(kamera.cam) - main.py does the same."""
+    gambar_awan()
     gambar_pulau()
     gambar_keep()
     gambar_menara()
+    gambar_dermaga()
+
+# ---------- Data untuk modul lain (lewat main.py) ----------
+# [AI] Claude, 2026-11-23: obstacle spheres for Module D, built from the landmark table (brief §4.4, §5.3
+#      "MENARA = (centre, radius) obstacle spheres"). PROPOSAL for Faris: one sphere per building at half its
+#      height, radius = its horizontal radius (keep: half the footprint diagonal). Module D's flee() adds its own
+#      margin (jari + 6.0). Faris decides the final shape. reviewed by Nando: pending
+MENARA = ([((x, MENARA_SUDUT_TINGGI / 2, z), MENARA_SUDUT_R) for x, z in MENARA_SUDUT]
+          + [((x, GERBANG_TINGGI / 2, z), GERBANG_R) for x, z in GERBANG]
+          + [((SPIRE_PUSAT[0], SPIRE_TINGGI / 2, SPIRE_PUSAT[1]), SPIRE_R),
+             ((KEEP_PUSAT[0], KEEP_ATAP / 2, KEEP_PUSAT[1]), math.hypot(*KEEP_UKURAN) / 2)])
+
+def get_landmarks():
+    """Read-only coordinates for main.py to pass on (modules never import world_scene):
+    Banner(TIANG=lm["tiang_bendera"]), pennant at lm["tiang_pennant"], Module A berth lm["tambat"],
+    Module D obstacles lm["menara"] = list of ((x, y, z), radius)."""
+    return {"tiang_bendera": TIANG_BENDERA, "tiang_pennant": TIANG_PENNANT, "tambat": TAMBAT,
+            "menara": [tuple(m) for m in MENARA]}
 
 # ---------- Program mandiri ----------
 # [AI] Claude, 2026-11-23: standalone viewer (W1, W2: solids + optional markers); reviewed by Nando: pending
 LEBAR, TINGGI = 1280, 720                # window size in pixels (assignment target 1280 x 720)
 
 def main():
-    rl.init_window(LEBAR, TINGGI, "world_scene - pulau dan kastil (W2)")
+    rl.init_window(LEBAR, TINGGI, "world_scene - Aether Castle Skyport (W3)")
     rl.set_target_fps(60)
     kamera = Kamera()
     while not rl.window_should_close():
         kamera.update()
         rl.begin_drawing()
-        rl.clear_background(rl.RAYWHITE)
+        rl.clear_background(LANGIT)
         rl.begin_mode_3d(kamera.cam)
         gambar_dunia()
         if TAMPILKAN_PENANDA:
             gambar_penanda()
         rl.end_mode_3d()
-        rl.draw_text("world_scene W2 - pulau, keep, menara (brief §4.2, §4.4)", 20, 16, 20, rl.DARKGRAY)
-        rl.draw_text("merah = TIANG bendera   oranye = TIANG pennant   biru = tambat (WP0)   hijau = tepi pulau",
-                     20, 44, 18, rl.GRAY)
+        rl.draw_text("world_scene W3 - Aether Castle Skyport (brief §4)", 20, 16, 20, rl.DARKGRAY)
+        if TAMPILKAN_PENANDA:
+            rl.draw_text("merah = TIANG bendera   oranye = TIANG pennant   biru = tambat (WP0)   hijau = tepi pulau",
+                         20, 44, 18, rl.GRAY)
         rl.draw_text(f"kamera: sudut {math.degrees(kamera.sudut) % 360:.0f} deg, "
                      f"jarak {math.hypot(KAMERA_R, KAMERA_H):.0f} m", 20, 70, 18, rl.GRAY)
         rl.draw_text("kiri/kanan = putar kamera", 20, TINGGI - 28, 18, rl.GRAY)
