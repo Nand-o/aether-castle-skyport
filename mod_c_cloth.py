@@ -1,4 +1,4 @@
-# [DOSEN] -> [AI] cloth_p16.py docstring, rewritten for the banner (C1-C4). Claude, 2026-11-23; reviewed by Nando: pending
+# [DOSEN] -> [AI] cloth_p16.py docstring, rewritten for the banner (C1-C5). Claude, 2026-11-23; reviewed by Nando: pending
 """
 Modul C - Bendera raksasa di menara utara (Aether Castle Skyport). PJ: Nando.
 Dasar: cloth_p16.py (Pertemuan 16, kode dosen): pegas-massa (P15) dan Verlet + constraint jarak (Jakobsen).
@@ -202,6 +202,11 @@ def v3(p):
     return rl.Vector3(float(p[0]), float(p[1]), float(p[2]))
 
 # ---------- Kelas modul (antarmuka tim, brief §7.2) ----------
+# [DOSEN] -> [AI] cloth_p16.py: the lecturer's two banner colours, now created once instead of for every quad
+#      every frame (C5). Claude, 2026-11-23; reviewed by Nando: pending
+WARNA_A = rl.Color(242, 140, 40, 255)    # orange
+WARNA_B = rl.Color(20, 33, 61, 255)      # dark blue
+
 # [AI] Claude, 2026-11-22: Module C class with the team interface. It only wraps the lecturer's functions
 #      above (the physics itself is unchanged) and adds the shared dt and substeps x iterations.
 #      reviewed by Nando: pending
@@ -277,19 +282,27 @@ class Banner:
         self.step_ms = ms if self.step_ms == 0.0 else self.step_ms + 0.05 * (ms - self.step_ms)
 
     def render_3d(self):
-        """Draw inside rl.begin_mode_3d(camera). [DOSEN] -> [AI] the lecturer's drawing loop from main(),
-        moved here unchanged except for the size (each triangle is still drawn twice; C5 makes it one pass)."""
+        """Draw inside rl.begin_mode_3d(camera). [DOSEN] -> [AI] the lecturer's drawing loop from main(), changed
+        in C5 (brief §5.2): every triangle is drawn ONCE with backface culling switched off, instead of twice with
+        opposite windings. raylib collects triangles in a batch and sends them to the GPU later, so the batch is
+        flushed before culling goes off (earlier objects keep culling) and again before it comes back on (the
+        banner is really drawn while culling is off). Without these flushes the setting does not apply to the banner.
+        Claude, 2026-11-23; reviewed by Nando: pending"""
         P, nc = self.c["pos"], self.NC
-        for r in range(self.NR - 1):                 # gambar sebagai segitiga dua sisi
+        V = [v3(p) for p in P]                       # one Vector3 per particle, reused by up to 6 triangles
+        rl.rl_draw_render_batch_active()             # flush 1: everything drawn so far, still with culling on
+        rl.rl_disable_backface_culling()             # both sides of every triangle are visible from here
+        for r in range(self.NR - 1):                 # gambar sebagai segitiga (sekali, dua sisi terlihat)
             for q in range(nc - 1):
-                a, b = P[idx(r, q, nc)], P[idx(r + 1, q, nc)]
-                c2, d = P[idx(r, q + 1, nc)], P[idx(r + 1, q + 1, nc)]
-                col = rl.Color(242, 140, 40, 255) if (r // 3 + q // 3) % 2 else rl.Color(20, 33, 61, 255)
-                for tri in ((a, b, c2), (b, d, c2)):
-                    rl.draw_triangle_3d(v3(tri[0]), v3(tri[1]), v3(tri[2]), col)
-                    rl.draw_triangle_3d(v3(tri[0]), v3(tri[2]), v3(tri[1]), col)
-        for p in P[self.c["pinned"]]:
-            rl.draw_sphere(v3(p), 0.1, rl.BLACK)
+                a, b = V[idx(r, q, nc)], V[idx(r + 1, q, nc)]
+                c2, d = V[idx(r, q + 1, nc)], V[idx(r + 1, q + 1, nc)]
+                col = WARNA_A if (r // 3 + q // 3) % 2 else WARNA_B
+                rl.draw_triangle_3d(a, b, c2, col)
+                rl.draw_triangle_3d(b, d, c2, col)
+        rl.rl_draw_render_batch_active()             # flush 2: the banner, while culling is still off
+        rl.rl_enable_backface_culling()
+        for i in np.flatnonzero(self.c["pinned"]):  # the pinned particles, as small black spheres
+            rl.draw_sphere(V[i], 0.1, rl.BLACK)
 
     def get_metrics(self):
         """Plain values for the HUD and the CSV (brief §5.2, §7.5)."""
