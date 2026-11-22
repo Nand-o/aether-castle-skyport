@@ -1,4 +1,4 @@
-# [DOSEN] -> [AI] cloth_p16.py docstring, rewritten for the banner (C1, C2). Claude, 2026-11-22; reviewed by Nando: pending
+# [DOSEN] -> [AI] cloth_p16.py docstring, rewritten for the banner (C1-C3). Claude, 2026-11-23; reviewed by Nando: pending
 """
 Modul C - Bendera raksasa di menara utara (Aether Castle Skyport). PJ: Nando.
 Dasar: cloth_p16.py (Pertemuan 16, kode dosen): pegas-massa (P15) dan Verlet + constraint jarak (Jakobsen).
@@ -9,9 +9,10 @@ Integrator: Verlet (redaman 0,99) + relaksasi Gauss-Seidel 12 grup, 4 substep x 
 
 Jalankan:  pip install -r requirements.txt   lalu   python mod_c_cloth.py
 Kontrol :  M ganti metode (Verlet-constraint / pegas), + / - iterasi Verlet, B pegas lentur on/off,
-           W angin kencang on/off, kiri/kanan putar kamera, R ulang, SPASI jeda
+           W angin kencang on/off, kiri/kanan putar kamera, R ulang, P / SPASI jeda, H bantuan
 """
 import math
+import time
 import numpy as np
 import pyray as rl
 
@@ -198,6 +199,7 @@ class Banner:
         self.bending = True
         self.resets = 0                      # NaN auto-resets so far (HUD)
         self.dt_terakhir = 1.0 / 60.0        # last shared dt; needed when M switches to Verlet
+        self.step_ms = 0.0                   # [AI] C3: cost of update() in ms, smoothed (HUD, report)
         self.reset()
 
     def reset(self):
@@ -206,6 +208,8 @@ class Banner:
         # both constraint masks are built once here, not every frame
         self.semua = np.ones(len(self.c["si"]), bool)
         self.tanpa_lentur = self.c["kind"] != "lentur"
+        # [AI] C3: the free (flying) edge = last column; its mean speed is the "tip speed" on the HUD
+        self.ujung = np.array([idx(r, self.NC - 1, self.NC) for r in range(self.NR)])
 
     def handle_input(self):
         """Module C keys only (brief §7.4): M, B, + and -. W (strong wind) belongs to main.py / the harness."""
@@ -227,6 +231,7 @@ class Banner:
         kapal: ship state for A->C; not used yet (wind_ship comes in C4)."""
         if dt <= 0.0:                            # first frame or paused: Verlet divides by dt
             return
+        t0 = time.perf_counter()                 # [AI] C3: step_ms = wall-clock cost of this update
         self.dt_terakhir = dt
         c = self.c
         active = self.semua if self.bending else self.tanpa_lentur
@@ -242,6 +247,9 @@ class Banner:
         if not np.all(np.isfinite(c["pos"])):
             self.reset()
             self.resets += 1
+        # [AI] C3: smooth step_ms over ~20 frames (0.05 per frame) so the HUD number is readable
+        ms = (time.perf_counter() - t0) * 1000.0
+        self.step_ms = ms if self.step_ms == 0.0 else self.step_ms + 0.05 * (ms - self.step_ms)
 
     def render_3d(self):
         """Draw inside rl.begin_mode_3d(camera). [DOSEN] -> [AI] the lecturer's drawing loop from main(),
@@ -262,22 +270,69 @@ class Banner:
         """Plain values for the HUD and the CSV (brief §5.2, §7.5)."""
         e_avg, e_max = stretch(self.c)
         active = self.semua if self.bending else self.tanpa_lentur
+        tip = float(np.mean(np.linalg.norm(self.c["vel"][self.ujung], axis=1)))   # [AI] C3: m/s
         return {"mode": self.mode, "substeps": self.substeps, "iters": self.iters, "bending": self.bending,
                 "partikel": len(self.c["pos"]), "constraint": int(active.sum()),
-                "stretch_mean": e_avg, "stretch_max": e_max, "resets": self.resets}
+                "stretch_mean": e_avg, "stretch_max": e_max, "resets": self.resets,
+                "tip_speed": tip, "step_ms": self.step_ms}
 
     def get_export_state(self):
         """Module C gives nothing to other modules (brief §5 table: exports = metrics only)."""
         return {}
 
 # ---------- Program mandiri (Tahap 2) ----------
+# [AI] Claude, 2026-11-23: window size, HUD and H overlay of the standalone harness (brief §5.2 HUD list, §7.5).
+#      In the full program main.py draws its own HUD from get_metrics(). reviewed by Nando: pending
+LEBAR, TINGGI = 1280, 720                # window size in pixels (assignment target: 60 FPS at 1280 x 720)
+BANTUAN = [                              # (key, what it does) for the H overlay
+    ("M", "ganti metode: Verlet-constraint / pegas-massa"),
+    ("+ / -", "iterasi Verlet per substep (1..20)"),
+    ("B", "pegas / constraint lentur on/off"),
+    ("W", "angin kencang on/off (main.py di program lengkap)"),
+    ("kiri / kanan", "putar kamera"),
+    ("R", "ulang bendera"),
+    ("P / SPASI", "jeda"),
+    ("H", "tutup bantuan"),
+]
+
+def gambar_hud(m, kencang, paused):
+    """Module C numbers on screen: every value comes from Banner.get_metrics()."""
+    if m["mode"] == "verlet":
+        metode = f"Verlet + constraint jarak, {m['substeps']} substep x {m['iters']} iterasi"
+    else:
+        metode = f"Pegas-massa + semi-implisit Euler, langkah <= {DT * 1000:.2f} ms"
+    baris = [
+        (f"Modul C - Bendera  |  {metode}", 20, rl.DARKGRAY),
+        (f"regangan rata-rata = {m['stretch_mean'] * 100:.2f} %   maks = {m['stretch_max'] * 100:.2f} %", 20, rl.MAROON),
+        (f"{m['partikel']} partikel, {m['constraint']} constraint   lentur = {'on' if m['bending'] else 'off'}"
+         f"   reset NaN = {m['resets']}", 18, rl.GRAY),
+        (f"kecepatan ujung bendera = {m['tip_speed']:.2f} m/s   step = {m['step_ms']:.2f} ms", 18, rl.GRAY),
+        (f"angin = {'KENCANG' if kencang else 'normal'}" + ("   [JEDA]" if paused else ""), 18, rl.GRAY),
+    ]
+    y = 16
+    for teks, ukuran, warna in baris:
+        rl.draw_text(teks, 20, y, ukuran, warna)
+        y += ukuran + 8
+    rl.draw_fps(LEBAR - 100, 16)
+    rl.draw_text("H = bantuan", 20, TINGGI - 28, 18, rl.GRAY)
+
+def gambar_bantuan():
+    """H overlay: every control of the standalone program (assignment rule: controls on screen or under H)."""
+    w, h = 620, 64 + 28 * len(BANTUAN)
+    x, y = (LEBAR - w) // 2, (TINGGI - h) // 2
+    rl.draw_rectangle(x, y, w, h, rl.fade(rl.BLACK, 0.8))
+    rl.draw_text("Kontrol Modul C (standalone)", x + 20, y + 16, 22, rl.RAYWHITE)
+    for k, (tombol, arti) in enumerate(BANTUAN):
+        rl.draw_text(tombol, x + 20, y + 56 + 28 * k, 18, rl.GOLD)
+        rl.draw_text(arti, x + 170, y + 56 + 28 * k, 18, rl.RAYWHITE)
+
 # [DOSEN] -> [AI] cloth_p16.py main() as the standalone harness: it now plays the role of main.py (one shared dt,
-#      the wind with W = strong, camera, pause, reset) and calls the Banner class. Claude, 2026-11-22;
-#      reviewed by Nando: pending
+#      the wind with W = strong, camera, pause, reset, HUD, H overlay) and calls the Banner class.
+#      Claude, 2026-11-22 (C2), 2026-11-23 (C3); reviewed by Nando: pending
 def main():
     bendera = Banner()
-    kencang, paused, t, cam_ang = False, False, 0.0, 0.6
-    rl.init_window(1000, 680, "Modul C - bendera di tiang (standalone)")
+    kencang, paused, bantuan, t, cam_ang = False, False, False, 0.0, 0.6
+    rl.init_window(LEBAR, TINGGI, "Modul C - bendera di tiang (standalone)")
     rl.set_target_fps(60)
     pusat = TIANG + np.array([-4.0, -6.0, 0.0])     # camera target (m): roughly the middle of the hanging banner
     jarak = 22.0                                     # camera orbit radius (m); range 12..40
@@ -287,7 +342,8 @@ def main():
         bendera.handle_input()                                      # M, B, + / -
         if rl.is_key_pressed(rl.KEY_W): kencang = not kencang       # wind key: main.py owns it in the full program
         if rl.is_key_pressed(rl.KEY_R): bendera.reset()
-        if rl.is_key_pressed(rl.KEY_SPACE): paused = not paused
+        if rl.is_key_pressed(rl.KEY_SPACE) or rl.is_key_pressed(rl.KEY_P): paused = not paused
+        if rl.is_key_pressed(rl.KEY_H): bantuan = not bantuan
         if rl.is_key_down(rl.KEY_LEFT): cam_ang -= 0.02
         if rl.is_key_down(rl.KEY_RIGHT): cam_ang += 0.02
         cam.position = v3(pusat + (jarak * math.sin(cam_ang), 2.0, jarak * math.cos(cam_ang)))
@@ -305,18 +361,9 @@ def main():
         rl.draw_cylinder_ex(v3(TIANG - (0.0, 9.5, 0.0)), v3(TIANG + (0.0, 0.5, 0.0)), 0.15, 0.15, 8, rl.DARKGRAY)
         bendera.render_3d()
         rl.end_mode_3d()
-        m = bendera.get_metrics()
-        if m["mode"] == "verlet":
-            name = f"Verlet + constraint jarak, {m['substeps']} substep x {m['iters']} iterasi"
-        else:
-            name = f"Pegas-massa + semi-implisit Euler, langkah <= {DT * 1000:.2f} ms"
-        rl.draw_text(f"Bendera {bendera.NR} x {bendera.NC}  |  {name}", 20, 16, 20, rl.DARKGRAY)
-        rl.draw_text(f"{m['partikel']} partikel, {m['constraint']} pegas   lentur = {'on' if m['bending'] else 'off'}"
-                     f"   angin = {'KENCANG' if kencang else 'normal'}   reset NaN = {m['resets']}", 20, 44, 18, rl.GRAY)
-        rl.draw_text(f"regangan rata-rata = {m['stretch_mean'] * 100:.1f} %   maks = {m['stretch_max'] * 100:.1f} %",
-                     20, 68, 18, rl.MAROON)
-        rl.draw_text("M metode | + - iterasi | B lentur | W angin kencang | kiri/kanan kamera | R ulang | SPASI jeda",
-                     20, 680 - 26, 16, rl.GRAY)
+        gambar_hud(bendera.get_metrics(), kencang, paused)
+        if bantuan:
+            gambar_bantuan()
         rl.end_drawing()
     rl.close_window()
 
