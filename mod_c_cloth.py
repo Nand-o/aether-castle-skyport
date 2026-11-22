@@ -1,4 +1,4 @@
-# [DOSEN] -> [AI] cloth_p16.py docstring, rewritten for the banner (C1-C3). Claude, 2026-11-23; reviewed by Nando: pending
+# [DOSEN] -> [AI] cloth_p16.py docstring, rewritten for the banner (C1-C4). Claude, 2026-11-23; reviewed by Nando: pending
 """
 Modul C - Bendera raksasa di menara utara (Aether Castle Skyport). PJ: Nando.
 Dasar: cloth_p16.py (Pertemuan 16, kode dosen): pegas-massa (P15) dan Verlet + constraint jarak (Jakobsen).
@@ -9,7 +9,8 @@ Integrator: Verlet (redaman 0,99) + relaksasi Gauss-Seidel 12 grup, 4 substep x 
 
 Jalankan:  pip install -r requirements.txt   lalu   python mod_c_cloth.py
 Kontrol :  M ganti metode (Verlet-constraint / pegas), + / - iterasi Verlet, B pegas lentur on/off,
-           W angin kencang on/off, kiri/kanan putar kamera, R ulang, P / SPASI jeda, H bantuan
+           W angin kencang on/off, F1 interaksi A->C (kapal tiruan) on/off, kiri/kanan putar kamera,
+           R ulang, P / SPASI jeda, H bantuan
 """
 import math
 import time
@@ -32,6 +33,9 @@ MASS = 0.1                               # kg per particle (lecturer: 1 kg sprea
 SUBSTEPS_VERLET = 4                      # Verlet steps per frame, each dt/4; range 1..8 (lecturer: 1)
 ITERS_VERLET = 2                         # Gauss-Seidel passes per step; range 1..20, keys + / - (lecturer: 12)
 MODE_AWAL = "verlet"                     # method at start: "verlet" or "pegas", key M (lecturer started in "pegas")
+# [AI] Claude, 2026-11-23: ship wake for interaction A->C (brief §5.2, §6); reviewed by Nando: pending
+R_KAPAL = 25.0                           # m, distance at which the ship's wake fades to zero; range 10..40
+GAIN_KAPAL = 2.0                         # wake strength: wind = GAIN x ship velocity at the ship; range 0..4 (0 = off)
 # [DOSEN] -> [AI] cloth_p16.py K: the lecturer's ratio 15 : 3.75 : 1 kept, values raised for 0.1-kg particles
 #      (brief §5.2). Used by spring mode only. Claude, 2026-11-22; reviewed by Nando: pending
 K = {"struktural": 6000.0, "geser": 1500.0, "lentur": 400.0}   # N/m; brief §10: 1500 = rubbery, 20000 blew up
@@ -180,6 +184,18 @@ def stretch(c):
 def wind_at(t):
     return np.array([1.5, 0.0, 4.0 + 2.0 * math.sin(1.3 * t)])   # angin berhembus naik-turun
 
+# ---------- Interaksi A -> C ----------
+# [AI] Claude, 2026-11-23: wind_ship, typed in from brief §5.2 (formula from Faris's prototype `angin_kapal`,
+#      [KAMI]); named like the lecturer's wind_forces. reviewed by Nando: pending
+def wind_ship(c, kapal, R=R_KAPAL, gain=GAIN_KAPAL):
+    """Extra wind (T, 3) on every triangle from the passing ship: gain * f(d) * ship velocity,
+    with f = (1 - (d/R)^2)^2 -> 1 at the ship, falls smoothly to 0 at distance R (and stays 0 beyond)."""
+    t = c["tris"]
+    pusat = (c["pos"][t[:, 0]] + c["pos"][t[:, 1]] + c["pos"][t[:, 2]]) / 3     # triangle centres (T, 3)
+    d = np.linalg.norm(pusat - kapal["pos"], axis=1)                            # distance to the ship (T,)
+    f = np.clip(1.0 - (d / R) ** 2, 0.0, None) ** 2                             # smooth falloff 1 -> 0
+    return gain * f[:, None] * kapal["vel"]
+
 # ---------- Tampilan 3D ----------
 # [DOSEN] cloth_p16.py: v3, unchanged
 def v3(p):
@@ -200,6 +216,7 @@ class Banner:
         self.resets = 0                      # NaN auto-resets so far (HUD)
         self.dt_terakhir = 1.0 / 60.0        # last shared dt; needed when M switches to Verlet
         self.step_ms = 0.0                   # [AI] C3: cost of update() in ms, smoothed (HUD, report)
+        self.angin_kapal_maks = 0.0          # [AI] C4: strongest ship wind on any triangle this frame (m/s)
         self.reset()
 
     def reset(self):
@@ -228,21 +245,29 @@ class Banner:
     def update(self, dt, angin_global, kapal=None):
         """Advance by the shared dt from main.py.
         angin_global: wind vector (3,) in m/s, or None for no wind.
-        kapal: ship state for A->C; not used yet (wind_ship comes in C4)."""
+        kapal: ship state {"pos", "vel"} from Module A for A->C, or None when F1 switches it off."""
         if dt <= 0.0:                            # first frame or paused: Verlet divides by dt
             return
         t0 = time.perf_counter()                 # [AI] C3: step_ms = wall-clock cost of this update
         self.dt_terakhir = dt
         c = self.c
         active = self.semua if self.bending else self.tanpa_lentur
+        # [AI] C4, interaction A->C: add the ship's wake to the global wind, per triangle.
+        #      (3,) + (T, 3) broadcasts to (T, 3); the lecturer's wind_forces accepts that unchanged.
+        wind = angin_global
+        self.angin_kapal_maks = 0.0
+        if kapal is not None:
+            wk = wind_ship(c, kapal)
+            self.angin_kapal_maks = float(np.max(np.linalg.norm(wk, axis=1)))
+            wind = (np.zeros(3) if angin_global is None else angin_global) + wk
         if self.mode == "verlet":
             h = dt / self.substeps               # substeps x iterations (brief §5.2): smaller h -> fewer passes needed
             for _ in range(self.substeps):
-                step_verlet(c, h, active, angin_global, self.iters)
+                step_verlet(c, h, active, wind, self.iters)
         else:
             n = max(1, math.ceil(dt / DT - 1e-9))    # enough steps that none is larger than the lecturer's DT
             for _ in range(n):
-                step_springs(c, dt / n, active, angin_global)
+                step_springs(c, dt / n, active, wind)
         # [DOSEN] cloth_p16.py main(): NaN auto-reset; [AI] counted for the HUD
         if not np.all(np.isfinite(c["pos"])):
             self.reset()
@@ -274,7 +299,8 @@ class Banner:
         return {"mode": self.mode, "substeps": self.substeps, "iters": self.iters, "bending": self.bending,
                 "partikel": len(self.c["pos"]), "constraint": int(active.sum()),
                 "stretch_mean": e_avg, "stretch_max": e_max, "resets": self.resets,
-                "tip_speed": tip, "step_ms": self.step_ms}
+                "tip_speed": tip, "step_ms": self.step_ms,
+                "ship_wind_at_banner": self.angin_kapal_maks}                       # [AI] C4: m/s, CSV column
 
     def get_export_state(self):
         """Module C gives nothing to other modules (brief §5 table: exports = metrics only)."""
@@ -289,13 +315,14 @@ BANTUAN = [                              # (key, what it does) for the H overlay
     ("+ / -", "iterasi Verlet per substep (1..20)"),
     ("B", "pegas / constraint lentur on/off"),
     ("W", "angin kencang on/off (main.py di program lengkap)"),
+    ("F1", "interaksi A->C on/off (kapal tiruan)"),
     ("kiri / kanan", "putar kamera"),
     ("R", "ulang bendera"),
     ("P / SPASI", "jeda"),
     ("H", "tutup bantuan"),
 ]
 
-def gambar_hud(m, kencang, paused):
+def gambar_hud(m, kencang, paused, inter_ac):
     """Module C numbers on screen: every value comes from Banner.get_metrics()."""
     if m["mode"] == "verlet":
         metode = f"Verlet + constraint jarak, {m['substeps']} substep x {m['iters']} iterasi"
@@ -307,6 +334,8 @@ def gambar_hud(m, kencang, paused):
         (f"{m['partikel']} partikel, {m['constraint']} constraint   lentur = {'on' if m['bending'] else 'off'}"
          f"   reset NaN = {m['resets']}", 18, rl.GRAY),
         (f"kecepatan ujung bendera = {m['tip_speed']:.2f} m/s   step = {m['step_ms']:.2f} ms", 18, rl.GRAY),
+        (f"angin kapal di bendera = {m['ship_wind_at_banner']:.2f} m/s   F1 A->C = {'on' if inter_ac else 'off'}",
+         18, rl.GRAY),
         (f"angin = {'KENCANG' if kencang else 'normal'}" + ("   [JEDA]" if paused else ""), 18, rl.GRAY),
     ]
     y = 16
@@ -326,12 +355,27 @@ def gambar_bantuan():
         rl.draw_text(tombol, x + 20, y + 56 + 28 * k, 18, rl.GOLD)
         rl.draw_text(arti, x + 170, y + 56 + 28 * k, 18, rl.RAYWHITE)
 
+# [AI] Claude, 2026-11-23: mock ship for testing A->C without Module A (brief §5.2 "Done when").
+#      It flies back and forth on the real north-pass line (WP3 -> WP5, about 14 m from the pole) and exports
+#      pos and vel exactly like Module A will: vel = (new_pos - old_pos) / dt. reviewed by Nando: pending
+KAPAL_A = np.array([40.0, 34.0, -30.0])     # m, one end of the pass
+KAPAL_B = np.array([-40.0, 34.0, -30.0])    # m, other end of the pass
+KAPAL_V = 6.0                               # m/s, mock ship speed (route average, brief §5.1)
+
+def kapal_tiruan(t):
+    """Mock ship position at time t: ping-pong between KAPAL_A and KAPAL_B at speed KAPAL_V."""
+    L = float(np.linalg.norm(KAPAL_B - KAPAL_A))
+    s = (t * KAPAL_V) % (2.0 * L)                 # distance flown inside the current out-and-back trip
+    u = s / L if s < L else 2.0 - s / L           # 0 -> 1 on the way out, 1 -> 0 on the way back
+    return KAPAL_A + u * (KAPAL_B - KAPAL_A)
+
 # [DOSEN] -> [AI] cloth_p16.py main() as the standalone harness: it now plays the role of main.py (one shared dt,
-#      the wind with W = strong, camera, pause, reset, HUD, H overlay) and calls the Banner class.
-#      Claude, 2026-11-22 (C2), 2026-11-23 (C3); reviewed by Nando: pending
+#      the wind with W = strong, F1 = A->C on/off with the mock ship, camera, pause, reset, HUD, H overlay)
+#      and calls the Banner class. Claude, 2026-11-22 (C2), 2026-11-23 (C3, C4); reviewed by Nando: pending
 def main():
     bendera = Banner()
     kencang, paused, bantuan, t, cam_ang = False, False, False, 0.0, 0.6
+    inter_ac, kapal_pos, kapal_vel = True, kapal_tiruan(0.0), np.zeros(3)   # F1 state and mock ship state
     rl.init_window(LEBAR, TINGGI, "Modul C - bendera di tiang (standalone)")
     rl.set_target_fps(60)
     pusat = TIANG + np.array([-4.0, -6.0, 0.0])     # camera target (m): roughly the middle of the hanging banner
@@ -344,6 +388,7 @@ def main():
         if rl.is_key_pressed(rl.KEY_R): bendera.reset()
         if rl.is_key_pressed(rl.KEY_SPACE) or rl.is_key_pressed(rl.KEY_P): paused = not paused
         if rl.is_key_pressed(rl.KEY_H): bantuan = not bantuan
+        if rl.is_key_pressed(rl.KEY_F1): inter_ac = not inter_ac      # same meaning as F1 in main.py
         if rl.is_key_down(rl.KEY_LEFT): cam_ang -= 0.02
         if rl.is_key_down(rl.KEY_RIGHT): cam_ang += 0.02
         cam.position = v3(pusat + (jarak * math.sin(cam_ang), 2.0, jarak * math.cos(cam_ang)))
@@ -352,7 +397,11 @@ def main():
         if not paused and dt > 0:
             t += dt
             angin = wind_at(t) * (2.0 if kencang else 1.0)          # lecturer's wind, doubled by W (stand-in for angin_global)
-            bendera.update(dt, angin, None)
+            baru = kapal_tiruan(t)
+            kapal_vel = (baru - kapal_pos) / dt                      # same velocity export as Module A
+            kapal_pos = baru
+            kapal = {"pos": kapal_pos, "vel": kapal_vel}
+            bendera.update(dt, angin, kapal if inter_ac else None)   # switched off = None, as main.py does
 
         rl.begin_drawing()
         rl.clear_background(rl.RAYWHITE)
@@ -360,8 +409,9 @@ def main():
         # flagpole from the top of the spire (y = 28 m) to just above TIANG; world_scene.py draws the real one
         rl.draw_cylinder_ex(v3(TIANG - (0.0, 9.5, 0.0)), v3(TIANG + (0.0, 0.5, 0.0)), 0.15, 0.15, 8, rl.DARKGRAY)
         bendera.render_3d()
+        rl.draw_sphere(v3(kapal_pos), 1.5, rl.MAROON if inter_ac else rl.GRAY)   # mock ship (grey = F1 off)
         rl.end_mode_3d()
-        gambar_hud(bendera.get_metrics(), kencang, paused)
+        gambar_hud(bendera.get_metrics(), kencang, paused, inter_ac)
         if bantuan:
             gambar_bantuan()
         rl.end_drawing()
