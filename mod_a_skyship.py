@@ -56,6 +56,13 @@ def titik_jalur(K, t):
     G, u = _segmen(np.asarray(K, dtype=float), t)
     return catmull_rom(G[0], G[1], G[2], G[3], u)      # [DOSEN] rumus satu segmen
 
+# [AI] turunan P'(u) = [3u^2 2u 1 0] . MCR . G, dipakai untuk arah hadap kapal (Tantangan 3 P7).
+#      Di titik kunci K_i hasilnya 1/2 (K_i+1 - K_i-1), sama dengan tangen Catmull-Rom di slide P7.
+def tangen_jalur(K, t):
+    """Turunan posisi terhadap t (belum dinormalisasi)."""
+    G, u = _segmen(np.asarray(K, dtype=float), t)
+    return np.array([3.0 * u * u, 2.0 * u, 1.0, 0.0]) @ MCR @ G
+
 # ---------- Arc-length: tabel (t, s) ----------
 # [DOSEN] catmull_rom_p7.py: bangun_tabel dan t_dari_s, tidak diubah
 def bangun_tabel(Kp, sampel_per_segmen=60):
