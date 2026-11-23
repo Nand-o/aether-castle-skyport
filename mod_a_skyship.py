@@ -64,12 +64,13 @@ def tangen_jalur(K, t):
     return np.array([3.0 * u * u, 2.0 * u, 1.0, 0.0]) @ MCR @ G
 
 # ---------- Arc-length: tabel (t, s) ----------
-# [DOSEN] catmull_rom_p7.py: bangun_tabel dan t_dari_s, tidak diubah
-def bangun_tabel(Kp, sampel_per_segmen=60):
+# [DOSEN] catmull_rom_p7.py: bangun_tabel dan t_dari_s. Satu-satunya perubahan [KAMI]: jalur tertutup
+#         punya n segmen untuk n titik kunci (dosen: len - 3 karena ada dua titik hantu).
+def bangun_tabel(K, sampel_per_segmen=60):
     """Aproksimasi arc length dengan jumlah panjang segmen garis kecil."""
-    nseg = len(Kp) - 3
+    nseg = len(K)
     ts = np.linspace(0.0, nseg, nseg * sampel_per_segmen + 1)
-    pts = np.array([titik_jalur(Kp, t) for t in ts])
+    pts = np.array([titik_jalur(K, t) for t in ts])
     panjang = np.linalg.norm(np.diff(pts, axis=0), axis=1)
     s = np.concatenate([[0.0], np.cumsum(panjang)])
     return ts, s / s[-1], s[-1]          # s dinormalisasi ke [0, 1]

@@ -26,3 +26,11 @@ def test_tangen_di_waypoint_sesuai_rumus_catmull_rom():
     for i in range(n):
         harap = 0.5 * (K[(i + 1) % n] - K[(i - 1) % n])                 # V_i = 1/2 (K_i+1 - K_i-1), slide P7
         assert np.allclose(A.tangen_jalur(K, float(i)), harap, atol=1e-9)
+
+
+def test_tabel_arc_length_jalur_tertutup():
+    ts, sn, L = A.bangun_tabel(K)
+    assert ts[0] == 0.0 and ts[-1] == len(K)       # n titik kunci = n segmen (jalur tertutup)
+    assert sn[0] == 0.0 and sn[-1] == 1.0
+    assert np.all(np.diff(sn) > 0)                 # naik terus, jadi bisa dibalik dengan np.interp
+    assert abs(L - 300.4) < 0.5                    # panjang rute ~300 m (prototipe: 300,4 m)
