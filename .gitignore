@@ -38,6 +38,11 @@ env/
 .env
 .env.*
 
+# --- Local-only tests (each member keeps their own, not committed) ----------
+tests/
+pytest.ini
+requirements-dev.txt
+
 # --- Runtime output ---------------------------------------------------------
 # CSV telemetry from the L key
 logs/
