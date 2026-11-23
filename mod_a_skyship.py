@@ -24,6 +24,23 @@ def catmull_rom(P0, P1, P2, P3, u):
     T = np.array([u**3, u**2, u, 1.0])
     return T @ MCR @ np.array([P0, P1, P2, P3])
 
+# ---------- Rute kapal ----------
+# [AI] 11 titik kunci rute tertutup mengelilingi pulau, dalam meter (+Y ke atas, -Z = utara),
+#      dari tabel brief v3.2 §5.1. WP0 = tempat berlabuh di dermaga timur; WP4 = lewat dekat bendera.
+WAYPOINTS = [
+    (38.0,  4.5,   0.0),   # 0  berlabuh di dermaga
+    (41.0,  9.0, -16.0),   # 1  naik meninggalkan dermaga
+    (40.0, 18.0, -31.0),   # 2  timur laut
+    (20.0, 30.0, -37.0),   # 3  mulai lintasan utara
+    (-2.0, 34.0, -30.0),   # 4  lewat dekat bendera (~14 m dari tiang)
+    (-24.0, 30.0, -36.0),  # 5  barat laut
+    (-46.0, 21.0, -16.0),  # 6  barat
+    (-44.0, 16.0,  16.0),  # 7  barat daya
+    (-16.0, 14.0,  42.0),  # 8  selatan
+    (18.0, 11.0,  44.0),   # 9  tenggara
+    (41.0,  6.0,  18.0),   # 10 mendekati dermaga
+]
+
 # [DOSEN] catmull_rom_p7.py: titik_jalur, tidak diubah (masih versi jalur terbuka dengan titik hantu)
 def titik_jalur(Kp, t):
     """t dalam [0, jumlah_segmen]; bagian bulat = nomor segmen, sisanya = u lokal."""
