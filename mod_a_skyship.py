@@ -41,12 +41,20 @@ WAYPOINTS = [
     (41.0,  6.0,  18.0),   # 10 mendekati dermaga
 ]
 
-# [DOSEN] catmull_rom_p7.py: titik_jalur, tidak diubah (masih versi jalur terbuka dengan titik hantu)
-def titik_jalur(Kp, t):
-    """t dalam [0, jumlah_segmen]; bagian bulat = nomor segmen, sisanya = u lokal."""
-    nseg = len(Kp) - 3
-    i = min(int(t), nseg - 1)
-    return catmull_rom(Kp[i], Kp[i + 1], Kp[i + 2], Kp[i + 3], t - i)
+# [AI] jalur TERTUTUP: n titik kunci = n segmen, t dalam [0, n). Empat titik tetangga diambil dengan
+#      indeks modulo n, jadi tidak perlu titik hantu seperti di versi dosen (jalur terbuka).
+def _segmen(K, t):
+    """Kembalikan (G, u): 4 titik kontrol segmen ke-floor(t) berbentuk (4, 3) dan u lokal dalam [0, 1)."""
+    n = len(K)
+    i = int(t) % n
+    u = t - int(t)
+    G = K[[(i - 1) % n, i, (i + 1) % n, (i + 2) % n]]
+    return G, u
+
+def titik_jalur(K, t):
+    """Posisi pada jalur tertutup di parameter global t (bagian bulat = segmen, sisanya = u)."""
+    G, u = _segmen(np.asarray(K, dtype=float), t)
+    return catmull_rom(G[0], G[1], G[2], G[3], u)      # [DOSEN] rumus satu segmen
 
 # ---------- Arc-length: tabel (t, s) ----------
 # [DOSEN] catmull_rom_p7.py: bangun_tabel dan t_dari_s, tidak diubah
