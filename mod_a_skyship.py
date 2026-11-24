@@ -92,3 +92,21 @@ def ease_parabola(t, t1=0.3, t2=0.7):
     if t <= t2:
         return v0 * t1 / 2.0 + v0 * (t - t1)
     return 1.0 - v0 * (1.0 - t) ** 2 / (2.0 * (1.0 - t2))
+
+# ---------- Kapal ----------
+T_LAP = 50.0          # s, waktu satu putaran (rute ~300 m -> rata-rata ~6 m/s)
+
+# [AI] kapal mengikuti pola game loop P7: waktu tau (0..1) -> parameter t -> posisi di jalur
+class Skyship:
+    def __init__(self, waypoints=WAYPOINTS, t_lap=T_LAP):
+        self.K = np.asarray(waypoints, dtype=float)
+        self.ts, self.s_norm, self.panjang = bangun_tabel(self.K)
+        self.t_lap = t_lap
+        self.tau = 0.0                       # waktu putaran ternormalisasi, 0 = 1 = di dermaga
+        self.t = 0.0                         # parameter global jalur, 0..n
+        self.pos = titik_jalur(self.K, 0.0)
+
+    def update(self, dt):
+        self.tau = (self.tau + dt / self.t_lap) % 1.0
+        self.t = self.tau * len(self.K)
+        self.pos = titik_jalur(self.K, self.t)
