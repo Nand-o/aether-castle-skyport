@@ -96,6 +96,7 @@ def ease_parabola(t, t1=0.3, t2=0.7):
 # ---------- Kapal ----------
 T_LAP = 50.0          # s, waktu satu putaran (rute ~300 m -> rata-rata ~6 m/s)
 EASE_T1, EASE_T2 = 0.3, 0.7   # batas fase ease_parabola: percepat sampai t1, konstan, perlambat setelah t2
+RADIUS_KAPAL = 4.5    # m, ukuran kapal yang dipakai modul lain (kawanan menjauh, bendera kena angin)
 
 # [AI] kapal mengikuti pola game loop P7: waktu tau (0..1) -> parameter t -> posisi di jalur
 class Skyship:
@@ -108,6 +109,13 @@ class Skyship:
         self.tau = 0.0                       # waktu putaran ternormalisasi, 0 = 1 = di dermaga
         self.t = 0.0                         # parameter global jalur, 0..n
         self.pos = titik_jalur(self.K, 0.0)
+        self.vel = np.zeros(3)
+        self.forward = self._arah(0.0)
+
+    def _arah(self, t):
+        """Arah hadap = tangen kurva yang dinormalisasi (tetap terdefinisi walau kapal berhenti)."""
+        d = tangen_jalur(self.K, t)
+        return d / max(np.linalg.norm(d), 1e-9)
 
     def update(self, dt):
         self.tau = (self.tau + dt / self.t_lap) % 1.0
@@ -116,4 +124,12 @@ class Skyship:
         s = ease_parabola(self.tau, EASE_T1, EASE_T2) if self.pakai_ease else self.tau
         # [DOSEN] pola P7: dengan tabel, jarak s diubah jadi t; tanpa tabel, t = s * jumlah segmen
         self.t = t_dari_s(self.ts, self.s_norm, s) if self.mode_arc else s * len(self.K)
-        self.pos = titik_jalur(self.K, self.t)
+        baru = titik_jalur(self.K, self.t)
+        self.vel = (baru - self.pos) / dt            # kecepatan dari selisih posisi (Tantangan 1 P7)
+        self.pos = baru
+        self.forward = self._arah(self.t)
+
+    def get_export_state(self):
+        """Keadaan kapal untuk modul lain (salinan, jadi aman dibaca)."""
+        return {"pos": self.pos.copy(), "vel": self.vel.copy(), "forward": self.forward.copy(),
+                "radius": RADIUS_KAPAL}
