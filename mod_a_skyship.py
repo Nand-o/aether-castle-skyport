@@ -118,6 +118,8 @@ class Skyship:
         return d / max(np.linalg.norm(d), 1e-9)
 
     def update(self, dt):
+        if dt <= 0.0:                                # frame pertama atau jeda: tidak ada yang bergerak
+            return
         self.tau = (self.tau + dt / self.t_lap) % 1.0
         # ease dihitung atas satu putaran penuh, dan WP0 adalah dermaga: kapal otomatis
         # melambat sampai berhenti di dermaga, lalu berangkat pelan lagi
