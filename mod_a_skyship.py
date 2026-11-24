@@ -102,11 +102,14 @@ class Skyship:
         self.K = np.asarray(waypoints, dtype=float)
         self.ts, self.s_norm, self.panjang = bangun_tabel(self.K)
         self.t_lap = t_lap
+        self.mode_arc = True                 # True: kecepatan konstan (tabel arc-length); False: t seragam
         self.tau = 0.0                       # waktu putaran ternormalisasi, 0 = 1 = di dermaga
         self.t = 0.0                         # parameter global jalur, 0..n
         self.pos = titik_jalur(self.K, 0.0)
 
     def update(self, dt):
         self.tau = (self.tau + dt / self.t_lap) % 1.0
-        self.t = self.tau * len(self.K)
+        s = self.tau
+        # [DOSEN] pola P7: dengan tabel, jarak s diubah jadi t; tanpa tabel, t = s * jumlah segmen
+        self.t = t_dari_s(self.ts, self.s_norm, s) if self.mode_arc else s * len(self.K)
         self.pos = titik_jalur(self.K, self.t)
