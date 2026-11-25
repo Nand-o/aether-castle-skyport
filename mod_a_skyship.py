@@ -97,6 +97,8 @@ def ease_parabola(t, t1=0.3, t2=0.7):
 
 # ---------- Kapal ----------
 T_LAP = 50.0          # s, waktu satu putaran (rute ~300 m -> rata-rata ~6 m/s)
+T_LAP_MIN, T_LAP_MAX = 20.0, 150.0   # s, batas tombol [ dan ] (~15 m/s sampai ~2 m/s)
+LANGKAH_T_LAP = 1.25  # tiap tekan [ atau ], waktu putaran dikali / dibagi 1,25
 EASE_T1, EASE_T2 = 0.3, 0.7   # batas fase ease_parabola: percepat sampai t1, konstan, perlambat setelah t2
 RADIUS_KAPAL = 4.5    # m, ukuran kapal yang dipakai modul lain (kawanan menjauh, bendera kena angin)
 JENDELA_SIGMA = 2.0   # s, rentang waktu untuk menghitung simpangan kecepatan di HUD
@@ -163,6 +165,13 @@ class Skyship:
     def toggle_ease(self):
         self.pakai_ease = not self.pakai_ease
         self._selaraskan_tau()
+
+    # Tombol [ dan ]: hanya kecepatan putaran yang berubah, tau tetap, jadi posisi kapal tidak meloncat
+    def lebih_lambat(self):
+        self.t_lap = min(self.t_lap * LANGKAH_T_LAP, T_LAP_MAX)
+
+    def lebih_cepat(self):
+        self.t_lap = max(self.t_lap / LANGKAH_T_LAP, T_LAP_MIN)
 
     def _selaraskan_tau(self):
         """Cari tau yang menghasilkan parameter t sekarang di mode yang baru (posisi kapal tidak berubah)."""
