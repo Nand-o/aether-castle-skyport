@@ -100,6 +100,8 @@ T_LAP = 50.0          # s, waktu satu putaran (rute ~300 m -> rata-rata ~6 m/s)
 EASE_T1, EASE_T2 = 0.3, 0.7   # batas fase ease_parabola: percepat sampai t1, konstan, perlambat setelah t2
 RADIUS_KAPAL = 4.5    # m, ukuran kapal yang dipakai modul lain (kawanan menjauh, bendera kena angin)
 JENDELA_SIGMA = 2.0   # s, rentang waktu untuk menghitung simpangan kecepatan di HUD
+BATAS_BOID = 10       # jumlah boid di depan kapal yang membuat kapal paling lambat (interaksi D->A)
+LAMBAT_MAKS = 0.5     # kapal melambat paling banyak 50 %
 
 # [AI] kapal mengikuti pola game loop P7: waktu tau (0..1) -> parameter t -> posisi di jalur
 class Skyship:
@@ -114,6 +116,8 @@ class Skyship:
         self.pos = titik_jalur(self.K, 0.0)
         self.vel = np.zeros(3)
         self.forward = self._arah(0.0)
+        self.speed_scale = 1.0               # pengali kecepatan dari kawanan (D->A), 0,5..1
+        self.n_boid_depan = 0                # jumlah boid di depan kapal, dikirim main.py dari Modul D
         self.kecepatan = 0.0                 # m/s
         self.simpangan_kecepatan = 0.0       # %, simpangan baku / rata-rata dalam JENDELA_SIGMA detik
         self._riwayat = deque()              # pasangan (dt, kecepatan) untuk simpangan
@@ -123,10 +127,13 @@ class Skyship:
         d = tangen_jalur(self.K, t)
         return d / max(np.linalg.norm(d), 1e-9)
 
-    def update(self, dt):
+    def update(self, dt, n_boid_depan=0):
         if dt <= 0.0:                                # frame pertama atau jeda: tidak ada yang bergerak
             return
-        self.tau = (self.tau + dt / self.t_lap) % 1.0
+        # interaksi D->A: makin banyak boid di depan, makin lambat (paling lambat 50 % pada 10 boid)
+        self.n_boid_depan = n_boid_depan
+        self.speed_scale = 1.0 - LAMBAT_MAKS * min(1.0, n_boid_depan / BATAS_BOID)
+        self.tau = (self.tau + dt * self.speed_scale / self.t_lap) % 1.0
         # ease dihitung atas satu putaran penuh, dan WP0 adalah dermaga: kapal otomatis
         # melambat sampai berhenti di dermaga, lalu berangkat pelan lagi
         s = ease_parabola(self.tau, EASE_T1, EASE_T2) if self.pakai_ease else self.tau
