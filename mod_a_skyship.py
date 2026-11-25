@@ -126,6 +126,7 @@ class Skyship:
         self.pos = titik_jalur(self.K, 0.0)
         self.vel = np.zeros(3)
         self.forward = self._arah(0.0)
+        self.right, self.up = self._kanan_atas(self.forward)
         self.speed_scale = 1.0               # pengali kecepatan dari kawanan (D->A), 0,5..1
         self.n_boid_depan = 0                # jumlah boid di depan kapal, dikirim main.py dari Modul D
         self.kecepatan = 0.0                 # m/s
@@ -136,6 +137,14 @@ class Skyship:
         """Arah hadap = tangen kurva yang dinormalisasi (tetap terdefinisi walau kapal berhenti)."""
         d = tangen_jalur(self.K, t)
         return d / max(np.linalg.norm(d), 1e-9)
+
+    @staticmethod
+    def _kanan_atas(maju):
+        """Vektor kanan (mendatar) dan atas kapal dari arah maju, terhadap sumbu atas dunia (0, 1, 0).
+        Dipakai untuk menggambar sayap dan sirip. Rute tidak pernah tegak lurus (maks ~36 derajat)."""
+        kanan = np.cross(maju, (0.0, 1.0, 0.0))
+        kanan /= max(np.linalg.norm(kanan), 1e-9)
+        return kanan, np.cross(kanan, maju)
 
     def update(self, dt, n_boid_depan=0):
         if dt <= 0.0:                                # frame pertama atau jeda: tidak ada yang bergerak
@@ -154,6 +163,7 @@ class Skyship:
         self.vel = (baru - self.pos) / dt            # kecepatan dari selisih posisi (Tantangan 1 P7)
         self.pos = baru
         self.forward = self._arah(self.t)
+        self.right, self.up = self._kanan_atas(self.forward)
         self._ukur_kecepatan(dt)
 
     # Tombol T dan E: tanpa penyesuaian, tau yang sama menunjuk ke titik lain di jalur dan kapal meloncat
