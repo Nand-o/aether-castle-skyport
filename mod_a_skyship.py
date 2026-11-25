@@ -104,6 +104,13 @@ BATAS_BOID = 10       # jumlah boid di depan kapal yang membuat kapal paling lam
 LAMBAT_MAKS = 0.5     # kapal melambat paling banyak 50 %
 TAU_HALUS = 1.0       # s, konstanta waktu: perubahan kecepatan dari kawanan dihaluskan supaya tidak tersentak
 
+# [AI] kebalikan ease: s -> tau, lewat tabel (ease_parabola naik terus, jadi bisa dibalik dengan np.interp)
+_TAU = np.linspace(0.0, 1.0, 2001)
+_EASE = np.array([ease_parabola(x, EASE_T1, EASE_T2) for x in _TAU])
+
+def balik_ease(s):
+    return float(np.interp(s, _EASE, _TAU))
+
 # [AI] kapal mengikuti pola game loop P7: waktu tau (0..1) -> parameter t -> posisi di jalur
 class Skyship:
     def __init__(self, waypoints=WAYPOINTS, t_lap=T_LAP):
@@ -146,6 +153,21 @@ class Skyship:
         self.pos = baru
         self.forward = self._arah(self.t)
         self._ukur_kecepatan(dt)
+
+    # Tombol T dan E: tanpa penyesuaian, tau yang sama menunjuk ke titik lain di jalur dan kapal meloncat
+    # (begitu juga di demo P7). Jadi setelah mode berganti, tau dihitung ulang dari posisi kapal sekarang.
+    def toggle_mode(self):
+        self.mode_arc = not self.mode_arc
+        self._selaraskan_tau()
+
+    def toggle_ease(self):
+        self.pakai_ease = not self.pakai_ease
+        self._selaraskan_tau()
+
+    def _selaraskan_tau(self):
+        """Cari tau yang menghasilkan parameter t sekarang di mode yang baru (posisi kapal tidak berubah)."""
+        s = float(np.interp(self.t, self.ts, self.s_norm)) if self.mode_arc else self.t / len(self.K)
+        self.tau = balik_ease(s) if self.pakai_ease else s
 
     def _ukur_kecepatan(self, dt):
         """Kecepatan sekarang dan simpangannya selama JENDELA_SIGMA detik terakhir (angka untuk tombol T)."""
