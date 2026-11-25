@@ -102,6 +102,7 @@ RADIUS_KAPAL = 4.5    # m, ukuran kapal yang dipakai modul lain (kawanan menjauh
 JENDELA_SIGMA = 2.0   # s, rentang waktu untuk menghitung simpangan kecepatan di HUD
 BATAS_BOID = 10       # jumlah boid di depan kapal yang membuat kapal paling lambat (interaksi D->A)
 LAMBAT_MAKS = 0.5     # kapal melambat paling banyak 50 %
+TAU_HALUS = 1.0       # s, konstanta waktu: perubahan kecepatan dari kawanan dihaluskan supaya tidak tersentak
 
 # [AI] kapal mengikuti pola game loop P7: waktu tau (0..1) -> parameter t -> posisi di jalur
 class Skyship:
@@ -132,7 +133,8 @@ class Skyship:
             return
         # interaksi D->A: makin banyak boid di depan, makin lambat (paling lambat 50 % pada 10 boid)
         self.n_boid_depan = n_boid_depan
-        self.speed_scale = 1.0 - LAMBAT_MAKS * min(1.0, n_boid_depan / BATAS_BOID)
+        target = 1.0 - LAMBAT_MAKS * min(1.0, n_boid_depan / BATAS_BOID)
+        self.speed_scale += (target - self.speed_scale) * min(1.0, dt / TAU_HALUS)
         self.tau = (self.tau + dt * self.speed_scale / self.t_lap) % 1.0
         # ease dihitung atas satu putaran penuh, dan WP0 adalah dermaga: kapal otomatis
         # melambat sampai berhenti di dermaga, lalu berangkat pelan lagi
