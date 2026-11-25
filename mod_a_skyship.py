@@ -9,6 +9,7 @@ Integrator: kinematik (tau maju dt / t_lap, posisi dihitung langsung dari kurva)
 Jalankan:  pip install -r requirements.txt   lalu   python main.py
            (harness 3D mandiri untuk modul ini menyusul)
 """
+import time
 from collections import deque
 
 import numpy as np
@@ -123,6 +124,8 @@ class Skyship:
         self.pakai_ease = True               # True: pelan saat berangkat dan tiba di dermaga (WP0)
         self.tau = 0.0                       # waktu putaran ternormalisasi, 0 = 1 = di dermaga
         self.t = 0.0                         # parameter global jalur, 0..n
+        self.s = 0.0                         # jarak tempuh ternormalisasi dalam satu putaran, 0..1
+        self.step_ms = 0.0                   # lama update() terakhir, ms
         self.pos = titik_jalur(self.K, 0.0)
         self.vel = np.zeros(3)
         self.forward = self._arah(0.0)
@@ -149,6 +152,7 @@ class Skyship:
     def update(self, dt, n_boid_depan=0):
         if dt <= 0.0:                                # frame pertama atau jeda: tidak ada yang bergerak
             return
+        t0 = time.perf_counter()
         # interaksi D->A: makin banyak boid di depan, makin lambat (paling lambat 50 % pada 10 boid)
         self.n_boid_depan = n_boid_depan
         target = 1.0 - LAMBAT_MAKS * min(1.0, n_boid_depan / BATAS_BOID)
@@ -156,15 +160,16 @@ class Skyship:
         self.tau = (self.tau + dt * self.speed_scale / self.t_lap) % 1.0
         # ease dihitung atas satu putaran penuh, dan WP0 adalah dermaga: kapal otomatis
         # melambat sampai berhenti di dermaga, lalu berangkat pelan lagi
-        s = ease_parabola(self.tau, EASE_T1, EASE_T2) if self.pakai_ease else self.tau
+        self.s = ease_parabola(self.tau, EASE_T1, EASE_T2) if self.pakai_ease else self.tau
         # [DOSEN] pola P7: dengan tabel, jarak s diubah jadi t; tanpa tabel, t = s * jumlah segmen
-        self.t = t_dari_s(self.ts, self.s_norm, s) if self.mode_arc else s * len(self.K)
+        self.t = t_dari_s(self.ts, self.s_norm, self.s) if self.mode_arc else self.s * len(self.K)
         baru = titik_jalur(self.K, self.t)
         self.vel = (baru - self.pos) / dt            # kecepatan dari selisih posisi (Tantangan 1 P7)
         self.pos = baru
         self.forward = self._arah(self.t)
         self.right, self.up = self._kanan_atas(self.forward)
         self._ukur_kecepatan(dt)
+        self.step_ms = (time.perf_counter() - t0) * 1000.0
 
     # Tombol T dan E: tanpa penyesuaian, tau yang sama menunjuk ke titik lain di jalur dan kapal meloncat
     # (begitu juga di demo P7). Jadi setelah mode berganti, tau dihitung ulang dari posisi kapal sekarang.
@@ -196,6 +201,13 @@ class Skyship:
             self._riwayat.popleft()
         v = np.array([x for _, x in self._riwayat])
         self.simpangan_kecepatan = float(100.0 * v.std() / v.mean()) if v.mean() > 1e-9 else 0.0
+
+    def get_metrics(self):
+        """Angka untuk HUD dan CSV (main.py)."""
+        return {"ship_speed": self.kecepatan, "speed_sigma": self.simpangan_kecepatan,
+                "t": self.t, "s": self.s, "path_length": float(self.panjang),
+                "speed_scale": self.speed_scale, "boids_ahead": self.n_boid_depan,
+                "mode_arc": self.mode_arc, "ease": self.pakai_ease, "step_ms": self.step_ms}
 
     def get_export_state(self):
         """Keadaan kapal untuk modul lain (salinan, jadi aman dibaca)."""
