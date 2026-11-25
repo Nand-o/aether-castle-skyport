@@ -9,6 +9,8 @@ Integrator: kinematik (tau maju dt / t_lap, posisi dihitung langsung dari kurva)
 Jalankan:  pip install -r requirements.txt   lalu   python main.py
            (harness 3D mandiri untuk modul ini menyusul)
 """
+from collections import deque
+
 import numpy as np
 import pyray as rl
 
@@ -92,3 +94,60 @@ def ease_parabola(t, t1=0.3, t2=0.7):
     if t <= t2:
         return v0 * t1 / 2.0 + v0 * (t - t1)
     return 1.0 - v0 * (1.0 - t) ** 2 / (2.0 * (1.0 - t2))
+
+# ---------- Kapal ----------
+T_LAP = 50.0          # s, waktu satu putaran (rute ~300 m -> rata-rata ~6 m/s)
+EASE_T1, EASE_T2 = 0.3, 0.7   # batas fase ease_parabola: percepat sampai t1, konstan, perlambat setelah t2
+RADIUS_KAPAL = 4.5    # m, ukuran kapal yang dipakai modul lain (kawanan menjauh, bendera kena angin)
+JENDELA_SIGMA = 2.0   # s, rentang waktu untuk menghitung simpangan kecepatan di HUD
+
+# [AI] kapal mengikuti pola game loop P7: waktu tau (0..1) -> parameter t -> posisi di jalur
+class Skyship:
+    def __init__(self, waypoints=WAYPOINTS, t_lap=T_LAP):
+        self.K = np.asarray(waypoints, dtype=float)
+        self.ts, self.s_norm, self.panjang = bangun_tabel(self.K)
+        self.t_lap = t_lap
+        self.mode_arc = True                 # True: kecepatan konstan (tabel arc-length); False: t seragam
+        self.pakai_ease = True               # True: pelan saat berangkat dan tiba di dermaga (WP0)
+        self.tau = 0.0                       # waktu putaran ternormalisasi, 0 = 1 = di dermaga
+        self.t = 0.0                         # parameter global jalur, 0..n
+        self.pos = titik_jalur(self.K, 0.0)
+        self.vel = np.zeros(3)
+        self.forward = self._arah(0.0)
+        self.kecepatan = 0.0                 # m/s
+        self.simpangan_kecepatan = 0.0       # %, simpangan baku / rata-rata dalam JENDELA_SIGMA detik
+        self._riwayat = deque()              # pasangan (dt, kecepatan) untuk simpangan
+
+    def _arah(self, t):
+        """Arah hadap = tangen kurva yang dinormalisasi (tetap terdefinisi walau kapal berhenti)."""
+        d = tangen_jalur(self.K, t)
+        return d / max(np.linalg.norm(d), 1e-9)
+
+    def update(self, dt):
+        if dt <= 0.0:                                # frame pertama atau jeda: tidak ada yang bergerak
+            return
+        self.tau = (self.tau + dt / self.t_lap) % 1.0
+        # ease dihitung atas satu putaran penuh, dan WP0 adalah dermaga: kapal otomatis
+        # melambat sampai berhenti di dermaga, lalu berangkat pelan lagi
+        s = ease_parabola(self.tau, EASE_T1, EASE_T2) if self.pakai_ease else self.tau
+        # [DOSEN] pola P7: dengan tabel, jarak s diubah jadi t; tanpa tabel, t = s * jumlah segmen
+        self.t = t_dari_s(self.ts, self.s_norm, s) if self.mode_arc else s * len(self.K)
+        baru = titik_jalur(self.K, self.t)
+        self.vel = (baru - self.pos) / dt            # kecepatan dari selisih posisi (Tantangan 1 P7)
+        self.pos = baru
+        self.forward = self._arah(self.t)
+        self._ukur_kecepatan(dt)
+
+    def _ukur_kecepatan(self, dt):
+        """Kecepatan sekarang dan simpangannya selama JENDELA_SIGMA detik terakhir (angka untuk tombol T)."""
+        self.kecepatan = float(np.linalg.norm(self.vel))
+        self._riwayat.append((dt, self.kecepatan))
+        while sum(d for d, _ in self._riwayat) > JENDELA_SIGMA:
+            self._riwayat.popleft()
+        v = np.array([x for _, x in self._riwayat])
+        self.simpangan_kecepatan = float(100.0 * v.std() / v.mean()) if v.mean() > 1e-9 else 0.0
+
+    def get_export_state(self):
+        """Keadaan kapal untuk modul lain (salinan, jadi aman dibaca)."""
+        return {"pos": self.pos.copy(), "vel": self.vel.copy(), "forward": self.forward.copy(),
+                "radius": RADIUS_KAPAL}
