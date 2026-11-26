@@ -1,23 +1,15 @@
 # [AI] Claude, 2026-11-23: module docstring (W1-W3); reviewed by Nando: pending
 # [AI] Codex, 2026-11-26: catatan integrasi GLB (W4-W5); review Nando tertunda.
 """
-world_scene.py - dunia statis Aether Castle Skyport: pulau, kastil, menara, tiang, dermaga, langit, kamera.
-PJ: Nando. Raylib menampilkan lingkungan statis dan kamera. Simulasi berjalan di modul masing-masing.
-Koordinat dari tabel landmark brief §4.4: +Y ke atas, +X timur, -Z utara, 1 unit = 1 m, y = 0 = lantai pulau.
-Nilai bertanda ◇ dibawa dari brief v2 dan harus dicek dengan prototipe; perubahan diumumkan ke semua PJ.
+Dunia statis dan kamera orbit Aether Castle Skyport. PJ Nando.
+Sumbu +Y ke atas, +X ke timur, -Z ke utara. Satuan meter, lantai pulau pada y=0.
+Tanda ◇ menunjukkan nilai dari brief v2 yang perlu dicocokkan dengan prototipe.
 
-W1: konstanta landmark + kamera orbit + penampil penanda (wireframe) untuk mengecek posisi sebelum dimodelkan.
-W2: pulau padat (5 silinder bertumpuk), keep beratap pelana, menara sudut beratap kerucut, menara bendera + tiang,
-    menara gerbang dengan mangkuk anglo (hiasan) dan ambang gerbang.
-W3: dermaga + tiang penyangga + patok tambat, tiang pennant, warna langit, awan, dan get_landmarks() untuk main.py.
-W4–W5: aset GLB statis C14 dan jalur render Raylib. Primitif W3 tersedia untuk perbandingan.
+Di main.py, muat model sekali sesudah init_window() dan ambil get_landmarks().
+Setiap frame, panggil kamera.update(dt), gambar_langit(model) sebelum begin_mode_3d(),
+lalu gambar_dunia(model) di dalamnya. Panggil unload_model(model) sebelum close_window().
 
-Integrasi dengan main.py: panggil muat_model_dunia() sekali setelah init_window() dan simpan hasilnya.
-Panggil gambar_langit(model) sebelum begin_mode_3d() dan gambar_dunia(model) di dalamnya.
-Ambil get_landmarks() sekali di awal. Lepas model dengan rl.unload_model(model) sebelum close_window().
-
-Jalankan:  python world_scene.py [--primitives]
-Kontrol :  kiri/kanan putar kamera
+Jalankan python world_scene.py [--primitives]. Gunakan panah kiri dan kanan untuk orbit.
 """
 import argparse
 import math
@@ -40,7 +32,7 @@ KEEP_ATAP = 19.0                         # height of the keep's roof top ◇
 
 SPIRE_PUSAT = (0.0, -16.0)               # banner spire centre (x, z) ◇
 SPIRE_TINGGI = 28.0                      # spire tower top ◇
-SPIRE_R = 3.5                            # spire radius - MY ESTIMATE, not in the brief
+SPIRE_R = 3.5                            # radius perkiraan spire
 TIANG_PUNCAK = 38.0                      # flagpole top ◇
 TIANG_BENDERA = (0.0, 37.5, -16.0)       # banner pin point; MUST equal TIANG in mod_c_cloth.py
 
@@ -60,14 +52,11 @@ TIANG_DERMAGA = (31.0, 3.0)              # pier mast (x, z) ◇ - dock pennant (
 TIANG_DERMAGA_TINGGI = 8.0               # pier mast top ◇
 TIANG_PENNANT = (31.0, 8.0, 3.0)         # pennant pin point (Tier 2); must equal the pennant's TIANG
 
-PULAU_R = 32.0                           # island radius - MY ESTIMATE: corner towers reach r ≈ 31.1 m; range 31..36
+PULAU_R = 32.0                           # radius plateau W3; menara sudut mencapai r ≈ 31,1 m
 
 # ---------- Bentuk padat (W2) ----------
-# [AI] Claude, 2026-11-23: shape choices for the solid models - MY CHOICES, not in the brief unless marked;
-#      reviewed by Nando: pending
-# The island is a stack of cylinders: (y_bottom, y_top, radius_bottom, radius_top, colour key).
-# Row 0 is the grassy plateau (top at y = 0); the rest is the rocky underbelly that tapers to a point,
-# so the island reads as floating from any angle (brief §4.2 rule 2).
+# [AI] Claude, 2026-11-23: bentuk padat W2; review Nando tertunda.
+# Lapisan pulau: (y bawah, y atas, radius bawah, radius atas, warna).
 PULAU_LAPISAN = [
     (-1.5, 0.0, PULAU_R, PULAU_R, "rumput"),
     (-8.0, -1.5, 27.0, PULAU_R, "tanah1"),
@@ -91,7 +80,7 @@ WARNA = {                                # flat colours (brief §4.2 rule 5: no 
 TAMPILKAN_PENANDA = False
 
 # ---------- Dermaga, langit, awan (W3) ----------
-# [AI] Claude, 2026-11-23: pier details, sky and clouds - MY CHOICES, not in the brief; reviewed by Nando: pending
+# [AI] Claude, 2026-11-23: detail dermaga, langit, dan awan W3; review Nando tertunda.
 DERMAGA_TEBAL = 0.5                      # m, deck thickness (deck top at DERMAGA_Y)
 DERMAGA_PENYANGGA = [(33.0, -3.5), (33.0, 3.5), (39.0, -3.5), (39.0, 3.5)]   # support posts (x, z) under the deck
 DERMAGA_PENYANGGA_BAWAH = -4.0           # m, the posts hang down to here (the pier sticks out past the island edge)
@@ -111,7 +100,7 @@ AWAN_BOLA = [(rl.Vector3(x + dx * s, y + dy * s, z + dz * s), f * s)
 # [AI] Claude, 2026-11-23: camera parameters (brief §4.3); reviewed by Nando: pending
 KAMERA_TARGET = (0.0, 10.0, 0.0)         # orbit centre (brief §4.3)
 KAMERA_R = 100.0                         # m, horizontal orbit radius; with KAMERA_H the distance is ≈ 106 m (brief ≈ 105 ◇)
-KAMERA_H = 35.0                          # m, camera height above the target (my choice); range 10..60
+KAMERA_H = 35.0                          # tinggi kamera di atas target (m)
 KAMERA_SUDUT_AWAL = 0.6                  # rad, start angle (same as the lecturer's cam_ang)
 # [AI] Codex, 2026-11-26: laju orbit dalam rad/detik, setara 0,02 rad/frame pada 60 FPS.
 KAMERA_PUTAR = 1.2
@@ -196,7 +185,7 @@ def gambar_pulau():
         rl.draw_cylinder(v3((0.0, y0, 0.0)), r1, r0, y1 - y0, 24, WARNA[kunci])
 
 def gambar_keep():
-    """Main keep: a box for the walls and a gable roof (ridge along x) from 8 triangles."""
+    """Gambar dinding dan enam segitiga atap pelana, masing-masing dua sisi."""
     kx, kz = KEEP_PUSAT
     w, d = KEEP_UKURAN
     rl.draw_cube(v3((kx, KEEP_DINDING / 2, kz)), w, KEEP_DINDING, d, WARNA["batu"])
