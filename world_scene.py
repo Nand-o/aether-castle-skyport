@@ -112,7 +112,8 @@ KAMERA_TARGET = (0.0, 10.0, 0.0)         # orbit centre (brief §4.3)
 KAMERA_R = 100.0                         # m, horizontal orbit radius; with KAMERA_H the distance is ≈ 106 m (brief ≈ 105 ◇)
 KAMERA_H = 35.0                          # m, camera height above the target (my choice); range 10..60
 KAMERA_SUDUT_AWAL = 0.6                  # rad, start angle (same as the lecturer's cam_ang)
-KAMERA_PUTAR = 0.02                      # rad per frame while the arrow key is held (lecturer's value)
+# [AI] Codex, 2026-11-26: laju orbit dalam rad/detik, setara 0,02 rad/frame pada 60 FPS.
+KAMERA_PUTAR = 1.2
 KAMERA_FOVY = 45.0                       # degrees, vertical field of view (lecturer's value)
 
 def v3(p):
@@ -129,11 +130,17 @@ class Kamera:
                                rl.CAMERA_PERSPECTIVE)
         self._letakkan()
 
-    def update(self):
-        """Global keys left/right (brief §7.4): rotate around the island, as in the lecturer's main()."""
-        if rl.is_key_down(rl.KEY_LEFT): self.sudut -= KAMERA_PUTAR
-        if rl.is_key_down(rl.KEY_RIGHT): self.sudut += KAMERA_PUTAR
-        self._letakkan()
+    # [AI] Codex, 2026-11-26: orbit berbasis dt dengan laju tetap.
+    def update(self, dt=None):
+        """Putar kamera dengan panah kiri dan kanan memakai dt dalam detik."""
+        arah = int(rl.is_key_down(rl.KEY_RIGHT)) - int(rl.is_key_down(rl.KEY_LEFT))
+        if not arah:
+            return
+        if dt is None:
+            dt = rl.get_frame_time()
+        if dt > 0.0:
+            self.sudut += arah * KAMERA_PUTAR * dt
+            self._letakkan()
 
     def _letakkan(self):
         # position on a horizontal circle of radius KAMERA_R around the target, KAMERA_H above it
