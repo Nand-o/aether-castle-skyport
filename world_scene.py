@@ -293,12 +293,13 @@ MENARA = ([((x, MENARA_SUDUT_TINGGI / 2, z), MENARA_SUDUT_R) for x, z in MENARA_
           + [((SPIRE_PUSAT[0], SPIRE_TINGGI / 2, SPIRE_PUSAT[1]), SPIRE_R),
              ((KEEP_PUSAT[0], KEEP_ATAP / 2, KEEP_PUSAT[1]), math.hypot(*KEEP_UKURAN) / 2)])
 
+# [AI] Codex, 2026-11-26: salinan daftar proxy untuk pemanggil.
 def get_landmarks():
     """Read-only coordinates for main.py to pass on (modules never import world_scene):
     Banner(TIANG=lm["tiang_bendera"]), pennant at lm["tiang_pennant"], Module A berth lm["tambat"],
     Module D obstacles lm["menara"] = list of ((x, y, z), radius)."""
     return {"tiang_bendera": TIANG_BENDERA, "tiang_pennant": TIANG_PENNANT, "tambat": TAMBAT,
-            "menara": [tuple(m) for m in MENARA]}
+            "menara": MENARA.copy()}
 
 # ---------- Program mandiri ----------
 # [AI] Claude, 2026-11-23: standalone viewer (W1, W2: solids + optional markers); reviewed by Nando: pending
