@@ -1,7 +1,8 @@
 # [AI] Claude, 2026-11-23: module docstring (W1-W3); reviewed by Nando: pending
+# [AI] Codex, 2026-11-26: catatan integrasi GLB (W4-W5); review Nando tertunda.
 """
 world_scene.py - dunia statis Aether Castle Skyport: pulau, kastil, menara, tiang, dermaga, langit, kamera.
-PJ: Nando. Hanya primitif raylib (kubus, silinder, kerucut, bola); tidak ada kode simulasi di sini.
+PJ: Nando. Raylib menampilkan lingkungan statis dan kamera. Simulasi berjalan di modul masing-masing.
 Koordinat dari tabel landmark brief §4.4: +Y ke atas, +X timur, -Z utara, 1 unit = 1 m, y = 0 = lantai pulau.
 Nilai bertanda ◇ dibawa dari brief v2 dan harus dicek dengan prototipe; perubahan diumumkan ke semua PJ.
 
@@ -9,15 +10,26 @@ W1: konstanta landmark + kamera orbit + penampil penanda (wireframe) untuk menge
 W2: pulau padat (5 silinder bertumpuk), keep beratap pelana, menara sudut beratap kerucut, menara bendera + tiang,
     menara gerbang dengan mangkuk anglo (hiasan) dan ambang gerbang.
 W3: dermaga + tiang penyangga + patok tambat, tiang pennant, warna langit, awan, dan get_landmarks() untuk main.py.
+W4–W5: aset GLB statis C14 dan jalur render Raylib. Primitif W3 tersedia untuk perbandingan.
 
-Dipakai main.py:  kamera = Kamera(); tiap frame kamera.update(); rl.clear_background(LANGIT);
-                  di dalam rl.begin_mode_3d(kamera.cam): gambar_dunia(); lm = get_landmarks() sekali di awal.
+Integrasi dengan main.py: panggil muat_model_dunia() sekali setelah init_window() dan simpan hasilnya.
+Panggil gambar_langit(model) sebelum begin_mode_3d() dan gambar_dunia(model) di dalamnya.
+Ambil get_landmarks() sekali di awal. Lepas model dengan rl.unload_model(model) sebelum close_window().
 
-Jalankan:  python world_scene.py
+Jalankan:  python world_scene.py [--primitives]
 Kontrol :  kiri/kanan putar kamera
 """
+import argparse
 import math
+from pathlib import Path
+
 import pyray as rl
+
+# [AI] Codex, 2026-11-26: aset C14 dan warna langit dari preview C16; review Nando tertunda.
+ASET_DUNIA = Path(__file__).resolve().parent / "assets" / "skyport_world.glb"
+ASAL_MODEL = rl.Vector3(0.0, 0.0, 0.0)
+LANGIT_PUNCAK = rl.Color(94, 166, 232, 255)
+LANGIT_CAKRAWALA = rl.Color(210, 236, 245, 255)
 
 # ---------- Tabel landmark (brief §4.4) ----------
 # [AI] Claude, 2026-11-23: landmark register copied from brief §4.4 into named constants; reviewed by Nando: pending
@@ -230,9 +242,34 @@ def gambar_awan():
     for pusat, r in AWAN_BOLA:
         rl.draw_sphere_ex(pusat, r, 8, 10, WARNA["awan"])
 
+# [AI] Codex, 2026-11-26: memuat model statis C14 memakai Raylib; review Nando tertunda.
+def muat_model_dunia():
+    """Muat model sesudah konteks grafis Raylib tersedia."""
+    if not ASET_DUNIA.is_file():
+        raise FileNotFoundError(f"Aset world GLB tidak ditemukan: {ASET_DUNIA}")
+    model = rl.load_model(str(ASET_DUNIA))
+    if not rl.is_model_valid(model):
+        rl.unload_model(model)
+        raise RuntimeError(f"Raylib gagal memuat aset world: {ASET_DUNIA}")
+    return model
+
+
+# [AI] Codex, 2026-11-26: latar langit untuk viewer dan main.py; review Nando tertunda.
+def gambar_langit(model=None):
+    """Gambar latar setelah begin_drawing() dan sebelum begin_mode_3d()."""
+    rl.clear_background(LANGIT)
+    if model is not None:
+        rl.draw_rectangle_gradient_v(0, 0, rl.get_screen_width(), rl.get_screen_height(),
+                                     LANGIT_PUNCAK, LANGIT_CAKRAWALA)
+
+
 # [AI] Claude, 2026-11-23: W1-W3 draw order; reviewed by Nando: pending
-def gambar_dunia():
-    """Everything static in the world. Call inside rl.begin_mode_3d(kamera.cam) - main.py does the same."""
+# [AI] Codex, 2026-11-26: jalur GLB statis; review Nando tertunda.
+def gambar_dunia(model=None):
+    """Gambar world di mode 3D. Tanpa model, gunakan primitif W3."""
+    if model is not None:
+        rl.draw_model(model, ASAL_MODEL, 1.0, rl.WHITE)
+        return
     gambar_awan()
     gambar_pulau()
     gambar_keep()
@@ -260,29 +297,42 @@ def get_landmarks():
 # [AI] Claude, 2026-11-23: standalone viewer (W1, W2: solids + optional markers); reviewed by Nando: pending
 LEBAR, TINGGI = 1280, 720                # window size in pixels (assignment target 1280 x 720)
 
-def main():
-    rl.init_window(LEBAR, TINGGI, "world_scene - Aether Castle Skyport (W3)")
-    rl.set_target_fps(60)
-    kamera = Kamera()
-    while not rl.window_should_close():
-        kamera.update()
-        rl.begin_drawing()
-        rl.clear_background(LANGIT)
-        rl.begin_mode_3d(kamera.cam)
-        gambar_dunia()
-        if TAMPILKAN_PENANDA:
-            gambar_penanda()
-        rl.end_mode_3d()
-        rl.draw_text("world_scene W3 - Aether Castle Skyport (brief §4)", 20, 16, 20, rl.DARKGRAY)
-        if TAMPILKAN_PENANDA:
-            rl.draw_text("merah = TIANG bendera   oranye = TIANG pennant   biru = tambat (WP0)   hijau = tepi pulau",
-                         20, 44, 18, rl.GRAY)
-        rl.draw_text(f"kamera: sudut {math.degrees(kamera.sudut) % 360:.0f} deg, "
-                     f"jarak {math.hypot(KAMERA_R, KAMERA_H):.0f} m", 20, 70, 18, rl.GRAY)
-        rl.draw_text("kiri/kanan = putar kamera", 20, TINGGI - 28, 18, rl.GRAY)
-        rl.draw_fps(LEBAR - 100, 16)
-        rl.end_drawing()
-    rl.close_window()
+# [AI] Codex, 2026-11-26: viewer GLB dan pengelolaan umur model; review Nando tertunda.
+def main(primitives=False):
+    rl.init_window(LEBAR, TINGGI, "World Scene - Aether Castle Skyport")
+    model = None
+    try:
+        if not primitives:
+            model = muat_model_dunia()
+        mode = "Primitif W3" if primitives else "GLB statis C14"
+        rl.set_target_fps(60)
+        kamera = Kamera()
+        while not rl.window_should_close():
+            kamera.update()
+            rl.begin_drawing()
+            gambar_langit(model)
+            rl.begin_mode_3d(kamera.cam)
+            gambar_dunia(model)
+            if TAMPILKAN_PENANDA:
+                gambar_penanda()
+            rl.end_mode_3d()
+            rl.draw_text(f"Aether Castle Skyport | {mode}", 20, 16, 20, rl.DARKGRAY)
+            if TAMPILKAN_PENANDA:
+                rl.draw_text("merah = TIANG bendera   oranye = TIANG pennant   biru = tambat (WP0)   hijau = tepi pulau",
+                             20, 44, 18, rl.GRAY)
+            rl.draw_text(f"kamera: sudut {math.degrees(kamera.sudut) % 360:.0f} deg, "
+                         f"jarak {math.hypot(KAMERA_R, KAMERA_H):.0f} m", 20, 70, 18, rl.GRAY)
+            rl.draw_text("kiri/kanan = putar kamera", 20, TINGGI - 28, 18, rl.GRAY)
+            rl.draw_fps(LEBAR - 100, 16)
+            rl.end_drawing()
+    finally:
+        if model is not None:
+            rl.unload_model(model)
+        rl.close_window()
 
+
+# [AI] Codex, 2026-11-26: pilih tampilan pembanding W3 lewat argumen CLI; review Nando tertunda.
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Viewer world Aether Castle Skyport")
+    parser.add_argument("--primitives", action="store_true", help="Tampilkan world primitif W3 untuk perbandingan")
+    main(primitives=parser.parse_args().primitives)
