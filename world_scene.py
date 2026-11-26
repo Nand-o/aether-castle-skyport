@@ -1,5 +1,7 @@
-# [AI] Claude, 2026-11-23: module docstring (W1-W3); reviewed by Nando: pending
-# [AI] Codex, 2026-11-26: catatan integrasi GLB (W4-W5); review Nando tertunda.
+# Nando memilih C14 dan menetapkan GLB untuk penggambaran lingkungan statis.
+# Tata letak dan koordinat mengikuti brief tim.
+# [AI] Dokumentasi: Claude (2026-11-23) merangkum W1–W3; Codex (2026-11-26)
+# menjelaskan urutan pemuatan, gambar, dan pelepasan GLB.
 """
 Dunia statis dan kamera orbit Aether Castle Skyport. PJ Nando.
 Sumbu +Y ke atas, +X ke timur, -Z ke utara. Satuan meter, lantai pulau pada y=0.
@@ -17,14 +19,15 @@ from pathlib import Path
 
 import pyray as rl
 
-# [AI] Codex, 2026-11-26: aset C14 dan warna langit dari preview C16; review Nando tertunda.
+# Aset C14 dan warna langit dari preview C16.
 ASET_DUNIA = Path(__file__).resolve().parent / "assets" / "skyport_world.glb"
 ASAL_MODEL = rl.Vector3(0.0, 0.0, 0.0)
 LANGIT_PUNCAK = rl.Color(94, 166, 232, 255)
 LANGIT_CAKRAWALA = rl.Color(210, 236, 245, 255)
 
 # ---------- Tabel landmark (brief §4.4) ----------
-# [AI] Claude, 2026-11-23: landmark register copied from brief §4.4 into named constants; reviewed by Nando: pending
+# [AI] Claude (2026-11-23): konstanta landmark dari brief, penanda W1, dan geometri
+# primitif beserta urutan gambar W2–W3 untuk mengecek skala dan tata letak.
 # All positions in metres. (x, z) = centre on the ground plan; heights are measured from y = 0.
 KEEP_PUSAT = (-18.0, -4.0)               # main keep centre (x, z) ◇ - Module D obstacle
 KEEP_UKURAN = (16.0, 12.0)               # keep footprint along x and z ◇
@@ -55,7 +58,6 @@ TIANG_PENNANT = (31.0, 8.0, 3.0)         # pennant pin point (Tier 2); must equa
 PULAU_R = 32.0                           # radius plateau W3; menara sudut mencapai r ≈ 31,1 m
 
 # ---------- Bentuk padat (W2) ----------
-# [AI] Claude, 2026-11-23: bentuk padat W2; review Nando tertunda.
 # Lapisan pulau: (y bawah, y atas, radius bawah, radius atas, warna).
 PULAU_LAPISAN = [
     (-1.5, 0.0, PULAU_R, PULAU_R, "rumput"),
@@ -76,11 +78,10 @@ WARNA = {                                # flat colours (brief §4.2 rule 5: no 
     "tiang": rl.Color(60, 60, 60, 255), "anglo": rl.Color(70, 50, 40, 255),
     "kayu": rl.Color(146, 104, 66, 255), "kayu_gelap": rl.Color(104, 72, 46, 255), "awan": rl.Color(246, 248, 252, 255),
 }
-# [AI] Codex, 2026-11-26: wireframe W1 hanya berlaku pada world primitif.
+# Wireframe W1 untuk mode primitif.
 TAMPILKAN_PENANDA = False
 
 # ---------- Dermaga, langit, awan (W3) ----------
-# [AI] Claude, 2026-11-23: detail dermaga, langit, dan awan W3; review Nando tertunda.
 DERMAGA_TEBAL = 0.5                      # m, deck thickness (deck top at DERMAGA_Y)
 DERMAGA_PENYANGGA = [(33.0, -3.5), (33.0, 3.5), (39.0, -3.5), (39.0, 3.5)]   # support posts (x, z) under the deck
 DERMAGA_PENYANGGA_BAWAH = -4.0           # m, the posts hang down to here (the pier sticks out past the island edge)
@@ -97,12 +98,11 @@ AWAN_BOLA = [(rl.Vector3(x + dx * s, y + dy * s, z + dz * s), f * s)
              for dx, dy, dz, f in ((0.0, 0.0, 0.0, 1.0), (0.9, -0.2, 0.0, 0.7), (-0.9, -0.25, 0.3, 0.6))]
 
 # ---------- Kamera ----------
-# [AI] Claude, 2026-11-23: camera parameters (brief §4.3); reviewed by Nando: pending
+# Parameter orbit mengikuti brief §4.3. Laju 1,2 rad/detik setara orbit W3 pada 60 FPS.
 KAMERA_TARGET = (0.0, 10.0, 0.0)         # orbit centre (brief §4.3)
 KAMERA_R = 100.0                         # m, horizontal orbit radius; with KAMERA_H the distance is ≈ 106 m (brief ≈ 105 ◇)
 KAMERA_H = 35.0                          # tinggi kamera di atas target (m)
 KAMERA_SUDUT_AWAL = 0.6                  # rad, start angle (same as the lecturer's cam_ang)
-# [AI] Codex, 2026-11-26: laju orbit dalam rad/detik, setara 0,02 rad/frame pada 60 FPS.
 KAMERA_PUTAR = 1.2
 KAMERA_FOVY = 45.0                       # degrees, vertical field of view (lecturer's value)
 
@@ -113,6 +113,7 @@ def v3(p):
 # [DOSEN] -> [AI] cloth_p16.py main(): the lecturer's orbit camera (cam_ang changed by left/right, position on a
 #      circle around the target) moved into a class so main.py can own one camera object; target, radius and
 #      height changed for the island. Claude, 2026-11-23; reviewed by Nando: pending
+# Codex (2026-11-26): pakai dt agar laju orbit tetap saat FPS berubah.
 class Kamera:
     def __init__(self):
         self.sudut = KAMERA_SUDUT_AWAL
@@ -120,7 +121,6 @@ class Kamera:
                                rl.CAMERA_PERSPECTIVE)
         self._letakkan()
 
-    # [AI] Codex, 2026-11-26: orbit berbasis dt dengan laju tetap.
     def update(self, dt=None):
         """Putar kamera dengan panah kiri dan kanan memakai dt dalam detik."""
         arah = int(rl.is_key_down(rl.KEY_RIGHT)) - int(rl.is_key_down(rl.KEY_LEFT))
@@ -138,8 +138,6 @@ class Kamera:
         self.cam.position = v3((tx + KAMERA_R * math.sin(self.sudut), ty + KAMERA_H, tz + KAMERA_R * math.cos(self.sudut)))
 
 # ---------- Penanda posisi (W1) ----------
-# [AI] Claude, 2026-11-23: wireframe markers for every landmark, to check the coordinates before modelling
-#      (W2 and W3 replace them with solid primitives). reviewed by Nando: pending
 def gambar_penanda():
     """Draw inside rl.begin_mode_3d: one wireframe shape per landmark of brief §4.4."""
     # island outline on the deck level y = 0 (circle is drawn in the XY plane, so turn it 90° about X)
@@ -171,8 +169,6 @@ def gambar_penanda():
     rl.draw_line_3d(v3((0, 0, 0)), v3((0, 0, 10)), rl.BLUE)
 
 # ---------- Model padat (W2) ----------
-# [AI] Claude, 2026-11-23: solid models from raylib primitives (brief §4.2); everything is drawn from the constants
-#      above, nothing is computed per frame except the draw calls. reviewed by Nando: pending
 def segitiga_dua_sisi(a, b, c, warna):
     """One triangle visible from both sides: drawn twice with opposite windings (only used for the few roof
     triangles, so the cheap trick is fine here; the banner uses the culling-off method instead)."""
@@ -217,7 +213,6 @@ def gambar_menara():
     rl.draw_cube(v3(((gx0 + gx1) / 2, (ly0 + ly1) / 2, gz)), (gx1 - gx0) - 2 * GERBANG_R + 1.0, ly1 - ly0, 2.0,
                  WARNA["batu_gelap"])
 
-# [AI] Claude, 2026-11-23: W3 pier and clouds; reviewed by Nando: pending
 def gambar_dermaga():
     """East pier: wooden deck, support posts under it, two mooring bollards at the berth, and the pennant mast."""
     x0, x1 = DERMAGA_X
@@ -239,7 +234,8 @@ def gambar_awan():
     for pusat, r in AWAN_BOLA:
         rl.draw_sphere_ex(pusat, r, 8, 10, WARNA["awan"])
 
-# [AI] Codex, 2026-11-26: memuat model statis C14 memakai Raylib; review Nando tertunda.
+# [AI] Codex (2026-11-26): muat dan validasi GLB C14, gambar dunia dan langit,
+# serta gunakan jalur primitif W3 untuk membandingkan kedua tampilan.
 def muat_model_dunia():
     """Muat model sesudah konteks grafis Raylib tersedia."""
     if not ASET_DUNIA.is_file():
@@ -251,7 +247,6 @@ def muat_model_dunia():
     return model
 
 
-# [AI] Codex, 2026-11-26: latar langit untuk viewer dan main.py; review Nando tertunda.
 def gambar_langit(model=None):
     """Gambar latar setelah begin_drawing() dan sebelum begin_mode_3d()."""
     rl.clear_background(LANGIT)
@@ -260,8 +255,6 @@ def gambar_langit(model=None):
                                      LANGIT_PUNCAK, LANGIT_CAKRAWALA)
 
 
-# [AI] Claude, 2026-11-23: W1-W3 draw order; reviewed by Nando: pending
-# [AI] Codex, 2026-11-26: jalur GLB statis; review Nando tertunda.
 def gambar_dunia(model=None):
     """Gambar world di mode 3D. Tanpa model, gunakan primitif W3."""
     if model is not None:
@@ -274,16 +267,14 @@ def gambar_dunia(model=None):
     gambar_dermaga()
 
 # ---------- Data untuk modul lain (lewat main.py) ----------
-# [AI] Claude, 2026-11-23: obstacle spheres for Module D, built from the landmark table (brief §4.4, §5.3
-#      "MENARA = (centre, radius) obstacle spheres"). PROPOSAL for Faris: one sphere per building at half its
-#      height, radius = its horizontal radius (keep: half the footprint diagonal). Module D's flee() adds its own
-#      margin (jari + 6.0). Faris decides the final shape. reviewed by Nando: pending
+# [AI] Claude (2026-11-23): proxy bola awal dari landmark brief §4.4 dan §5.3.
+# Codex (2026-11-26): get_landmarks() menyalin daftar proxy agar pemanggil tidak mengubah data world.
+# Pusat proxy di setengah tinggi bangunan; margin dan bentuk akhir diperiksa bersama Modul D.
 MENARA = ([((x, MENARA_SUDUT_TINGGI / 2, z), MENARA_SUDUT_R) for x, z in MENARA_SUDUT]
           + [((x, GERBANG_TINGGI / 2, z), GERBANG_R) for x, z in GERBANG]
           + [((SPIRE_PUSAT[0], SPIRE_TINGGI / 2, SPIRE_PUSAT[1]), SPIRE_R),
              ((KEEP_PUSAT[0], KEEP_ATAP / 2, KEEP_PUSAT[1]), math.hypot(*KEEP_UKURAN) / 2)])
 
-# [AI] Codex, 2026-11-26: salinan daftar proxy untuk pemanggil.
 def get_landmarks():
     """Read-only coordinates for main.py to pass on (modules never import world_scene):
     Banner(TIANG=lm["tiang_bendera"]), pennant at lm["tiang_pennant"], Module A berth lm["tambat"],
@@ -292,14 +283,14 @@ def get_landmarks():
             "menara": MENARA.copy()}
 
 # ---------- Program mandiri ----------
-# [AI] Claude, 2026-11-23: standalone viewer (W1, W2: solids + optional markers); reviewed by Nando: pending
+# [AI] Claude (2026-11-23): viewer mandiri dan penanda. Codex (2026-11-26):
+# muat model sekali, lepas saat keluar, dan sediakan --primitives untuk membandingkan W3.
+# Wireframe dibatasi ke W3 karena mengikuti geometri primitif.
 LEBAR, TINGGI = 1280, 720                # window size in pixels (assignment target 1280 x 720)
 
-# [AI] Codex, 2026-11-26: viewer GLB dan pengelolaan umur model; review Nando tertunda.
 def main(primitives=False):
     rl.init_window(LEBAR, TINGGI, "World Scene - Aether Castle Skyport")
     model = None
-    # [AI] Codex, 2026-11-26: penanda W1 mengikuti geometri primitif.
     tampilkan_penanda = primitives and TAMPILKAN_PENANDA
     try:
         if not primitives:
@@ -331,7 +322,6 @@ def main(primitives=False):
         rl.close_window()
 
 
-# [AI] Codex, 2026-11-26: pilih tampilan pembanding W3 lewat argumen CLI; review Nando tertunda.
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Viewer world Aether Castle Skyport")
     parser.add_argument("--primitives", action="store_true", help="Tampilkan world primitif W3 untuk perbandingan")
