@@ -87,7 +87,8 @@ WARNA = {                                # flat colours (brief §4.2 rule 5: no 
     "tiang": rl.Color(60, 60, 60, 255), "anglo": rl.Color(70, 50, 40, 255),
     "kayu": rl.Color(146, 104, 66, 255), "kayu_gelap": rl.Color(104, 72, 46, 255), "awan": rl.Color(246, 248, 252, 255),
 }
-TAMPILKAN_PENANDA = False                # True = also draw the W1 wireframe markers on top (to check alignment)
+# [AI] Codex, 2026-11-26: wireframe W1 hanya berlaku pada world primitif.
+TAMPILKAN_PENANDA = False
 
 # ---------- Dermaga, langit, awan (W3) ----------
 # [AI] Claude, 2026-11-23: pier details, sky and clouds - MY CHOICES, not in the brief; reviewed by Nando: pending
@@ -309,6 +310,8 @@ LEBAR, TINGGI = 1280, 720                # window size in pixels (assignment tar
 def main(primitives=False):
     rl.init_window(LEBAR, TINGGI, "World Scene - Aether Castle Skyport")
     model = None
+    # [AI] Codex, 2026-11-26: penanda W1 mengikuti geometri primitif.
+    tampilkan_penanda = primitives and TAMPILKAN_PENANDA
     try:
         if not primitives:
             model = muat_model_dunia()
@@ -321,11 +324,11 @@ def main(primitives=False):
             gambar_langit(model)
             rl.begin_mode_3d(kamera.cam)
             gambar_dunia(model)
-            if TAMPILKAN_PENANDA:
+            if tampilkan_penanda:
                 gambar_penanda()
             rl.end_mode_3d()
             rl.draw_text(f"Aether Castle Skyport | {mode}", 20, 16, 20, rl.DARKGRAY)
-            if TAMPILKAN_PENANDA:
+            if tampilkan_penanda:
                 rl.draw_text("merah = TIANG bendera   oranye = TIANG pennant   biru = tambat (WP0)   hijau = tepi pulau",
                              20, 44, 18, rl.GRAY)
             rl.draw_text(f"kamera: sudut {math.degrees(kamera.sudut) % 360:.0f} deg, "
