@@ -134,7 +134,7 @@ A↔D adalah pasangan dua arah dan A→C adalah interaksi ketiga. `main.py` akan
 aether-castle-skyport/
 ├── main.py              # game loop bersama (menyusul)
 ├── world_scene.py       # viewer lingkungan statis dan kamera orbit
-├── assets/             # GLB lingkungan dan README aset
+├── assets/              # GLB lingkungan dan README aset
 ├── mod_a_skyship.py     # Modul A: kapal langit
 ├── mod_c_cloth.py       # Modul C: bendera kastil
 ├── mod_d_boids.py       # Modul D: kawanan wyvern (menyusul)
@@ -147,8 +147,8 @@ aether-castle-skyport/
 | Anggota | GitHub | Bagian yang dikerjakan | PJ demo dan tanya jawab |
 | :--- | :--- | :--- | :--- |
 | Nando | [@Nand-o](https://github.com/Nand-o) | Modul C, `world_scene.py`, dan pennant sebagai Tier 2 | Modul C |
-| Faris | [@farismlna](https://github.com/farismlna) | Implementasi A, rencana implementasi D dan `main.py`, serta README | Modul D dan cadangan Modul A |
-| Anggota 3 | *(menyusul)* | Nama dan kontribusi akan dilengkapi | Modul A |
+| Faris | [@farismlna](https://github.com/farismlna) | Implementasi A dan `main.py`, serta README | Modul A |
+| Abdul | [@abdlhkm404](https://github.com/abdlhkm404) | Implementasi modul D | Modul D |
 
 ## Atribusi Kode
 
