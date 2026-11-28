@@ -273,10 +273,9 @@ LANGIT = rl.Color(178, 214, 240, 255)     # sama dengan world_scene.py
 KAMERA_TARGET = np.array([0.0, 15.0, 0.0])
 KAMERA_R, KAMERA_H = 95.0, 40.0           # m, jarak mendatar dan tinggi kamera dari target
 KAMERA_PUTAR = 1.2                        # rad/s saat panah kiri/kanan ditahan
-BANTUAN = ["T        arc-length <-> t seragam", "E        ease-in/out on/off",
-           "[  ]     putaran lebih lambat / cepat", "N        (tahan) kawanan tiruan, uji D->A",
-           "<-  ->   putar kamera",
-           "P        jeda", "R        ulang dari dermaga", "H        tutup bantuan"]
+BANTUAN = [("T", "arc-length <-> t seragam"), ("E", "ease-in/out on/off"),
+           ("[  ]", "putaran lebih lambat / cepat"), ("N", "(tahan) kawanan tiruan, uji D->A"),
+           ("<-  ->", "putar kamera"), ("P", "jeda"), ("R", "ulang dari dermaga"), ("H", "tutup bantuan")]
 
 def gambar_pulau():
     """Lantai pulau (r 32 m, y = 0) dan dermaga timur (dek y = 1 m), supaya letak WP0 terbaca."""
@@ -308,8 +307,9 @@ def gambar_hud(kapal, paused):
 def gambar_bantuan():
     x, y = LEBAR // 2 - 230, 200
     rl.draw_rectangle(x, y, 460, 40 + 30 * len(BANTUAN), rl.fade(rl.BLACK, 0.75))
-    for i, teks in enumerate(BANTUAN):
-        rl.draw_text(teks, x + 24, y + 22 + 30 * i, 20, rl.RAYWHITE)
+    for i, (tombol, arti) in enumerate(BANTUAN):          # dua kolom, karena huruf raylib tidak sama lebar
+        rl.draw_text(tombol, x + 24, y + 22 + 30 * i, 20, rl.GOLD)
+        rl.draw_text(arti, x + 120, y + 22 + 30 * i, 20, rl.RAYWHITE)
 
 def main():
     kapal = Skyship()
