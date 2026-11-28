@@ -201,6 +201,14 @@ class Skyship:
         self.pakai_ease = not self.pakai_ease
         self._selaraskan_tau()
 
+    def handle_input(self):
+        """Tombol Modul A. main.py cukup memanggil ini (jangan tangani T/E/[/] lagi di main.py).
+        Dosen memakai M untuk mode; di sini T, karena M sudah dipakai Modul C."""
+        if rl.is_key_pressed(rl.KEY_T): self.toggle_mode()
+        if rl.is_key_pressed(rl.KEY_E): self.toggle_ease()
+        if rl.is_key_pressed(rl.KEY_LEFT_BRACKET): self.lebih_lambat()
+        if rl.is_key_pressed(rl.KEY_RIGHT_BRACKET): self.lebih_cepat()
+
     # Tombol [ dan ]: hanya kecepatan putaran yang berubah, tau tetap, jadi posisi kapal tidak meloncat
     def lebih_lambat(self):
         self.t_lap = min(self.t_lap * LANGKAH_T_LAP, T_LAP_MAX)
