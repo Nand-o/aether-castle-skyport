@@ -3,11 +3,17 @@ Modul A - Kapal langit di jalur Catmull-Rom tertutup 3D (Aether Castle Skyport).
 Dasar: catmull_rom_p7.py (Pertemuan 7, kode dosen). Sebagian kode baru dibuat dengan bantuan
 asisten AI (Claude); fungsinya ditandai [AI] dan dicatat di tabel atribusi README.
 Rujukan: Parent, R. (2012). Computer Animation: Algorithms and Techniques, Bab 3 (Interpolating Values):
-         interpolasi spline, menghitung arc length, dan ease-in/ease-out.
+         interpolasi spline Catmull-Rom, menghitung arc length, kontrol kecepatan dan ease-in/ease-out,
+         serta orientasi sepanjang jalur (di sini: arah maju dari tangen + sumbu atas dunia).
 Integrator: kinematik (tau maju dt / t_lap, posisi dihitung langsung dari kurva).
 
-Jalankan:  pip install -r requirements.txt   lalu   python main.py
-           (harness 3D mandiri untuk modul ini menyusul)
+Urutan per frame:  waktu tau -> ease -> jarak s -> tabel arc-length -> parameter t -> posisi dan arah.
+Antarmuka untuk main.py:  Skyship.update(dt, n_boid_depan), handle_input(), render_3d(), render_rute(),
+                          get_metrics(), get_export_state() -> {"pos", "vel", "forward", "radius"}.
+
+Jalankan:  pip install -r requirements.txt   lalu   python mod_a_skyship.py
+Tombol:    T arc-length <-> t seragam, E ease on/off, [ ] waktu putaran, N (tahan) kawanan tiruan,
+           panah kiri/kanan kamera, P jeda, R ulang, H bantuan.
 """
 import time
 from collections import deque
@@ -114,6 +120,22 @@ _EASE = np.array([ease_parabola(x, EASE_T1, EASE_T2) for x in _TAU])
 def balik_ease(s):
     return float(np.interp(s, _EASE, _TAU))
 
+# ---------- Gambar ----------
+# [DOSEN] V() dari catmull_rom_p7.py, diubah ke 3D: titik NumPy (x, y, z) -> rl.Vector3
+def v3(p):
+    return rl.Vector3(float(p[0]), float(p[1]), float(p[2]))
+
+# [AI] warna dan segitiga dua sisi untuk kapal (bentuk dasar raylib saja, tanpa model 3D)
+WARNA_LAMBUNG = rl.Color(146, 104, 66, 255)    # kayu, sama dengan dermaga di world_scene.py
+WARNA_SAYAP = rl.Color(232, 222, 196, 255)     # kain layar
+WARNA_SIRIP = rl.Color(150, 58, 44, 255)       # merah atap kastil
+WARNA_LENTERA = rl.Color(255, 196, 64, 255)
+
+def segitiga_dua_sisi(a, b, c, warna):
+    """raylib hanya menggambar sisi depan segitiga, jadi digambar dua kali dengan urutan titik dibalik."""
+    rl.draw_triangle_3d(v3(a), v3(b), v3(c), warna)
+    rl.draw_triangle_3d(v3(a), v3(c), v3(b), warna)
+
 # [AI] kapal mengikuti pola game loop P7: waktu tau (0..1) -> parameter t -> posisi di jalur
 class Skyship:
     def __init__(self, waypoints=WAYPOINTS, t_lap=T_LAP):
@@ -135,6 +157,10 @@ class Skyship:
         self.kecepatan = 0.0                 # m/s
         self.simpangan_kecepatan = 0.0       # %, simpangan baku / rata-rata dalam JENDELA_SIGMA detik
         self._riwayat = deque()              # pasangan (dt, kecepatan) untuk simpangan
+        # titik garis rute dan penanda jarak sama, dihitung sekali di sini (bukan tiap frame)
+        n = len(self.K)
+        self._garis = [v3(titik_jalur(self.K, t)) for t in np.linspace(0.0, n, 400 + 1)]
+        self._penanda = [v3(titik_jalur(self.K, t_dari_s(self.ts, self.s_norm, i / 20))) for i in range(20)]
 
     def _arah(self, t):
         """Arah hadap = tangen kurva yang dinormalisasi (tetap terdefinisi walau kapal berhenti)."""
@@ -181,6 +207,14 @@ class Skyship:
         self.pakai_ease = not self.pakai_ease
         self._selaraskan_tau()
 
+    def handle_input(self):
+        """Tombol Modul A. main.py cukup memanggil ini (jangan tangani T/E/[/] lagi di main.py).
+        Dosen memakai M untuk mode; di sini T, karena M sudah dipakai Modul C."""
+        if rl.is_key_pressed(rl.KEY_T): self.toggle_mode()
+        if rl.is_key_pressed(rl.KEY_E): self.toggle_ease()
+        if rl.is_key_pressed(rl.KEY_LEFT_BRACKET): self.lebih_lambat()
+        if rl.is_key_pressed(rl.KEY_RIGHT_BRACKET): self.lebih_cepat()
+
     # Tombol [ dan ]: hanya kecepatan putaran yang berubah, tau tetap, jadi posisi kapal tidak meloncat
     def lebih_lambat(self):
         self.t_lap = min(self.t_lap * LANGKAH_T_LAP, T_LAP_MAX)
@@ -213,3 +247,109 @@ class Skyship:
         """Keadaan kapal untuk modul lain (salinan, jadi aman dibaca)."""
         return {"pos": self.pos.copy(), "vel": self.vel.copy(), "forward": self.forward.copy(),
                 "radius": RADIUS_KAPAL}
+
+    # ---------- gambar (dipanggil di antara begin_mode_3d dan end_mode_3d) ----------
+    def render_3d(self):
+        """Lambung sepanjang forward, sayap sepanjang right, sirip ke arah up: arah hadap dan
+        kemiringan kapal langsung terbaca. Ujung sayap = RADIUS_KAPAL (4,5 m) dari pusat."""
+        p, f, r, u = self.pos, self.forward, self.right, self.up
+        rl.draw_cylinder_ex(v3(p - 4.0 * f), v3(p + 4.0 * f), 1.5, 0.6, 12, WARNA_LAMBUNG)   # buritan -> haluan
+        for sisi in (1.0, -1.0):                                                          # sayap kanan, kiri
+            segitiga_dua_sisi(p + 1.0 * f + sisi * r, p - 2.0 * f + sisi * r,
+                              p - 2.5 * f + sisi * RADIUS_KAPAL * r, WARNA_SAYAP)
+        segitiga_dua_sisi(p - 1.5 * f + u, p - 4.0 * f + u, p - 4.2 * f + 3.5 * u, WARNA_SIRIP)  # sirip ekor
+        rl.draw_sphere(v3(p + 4.4 * f), 0.45, WARNA_LENTERA)                               # lentera di haluan
+
+    def render_rute(self):
+        """Pola gambar P7 dalam 3D: garis kurva, titik kunci (WP0 = dermaga, biru), dan 20 penanda
+        berjarak sama (s = i/20, abu-abu). Penanda yang rapat sama rata menunjukkan tabel arc-length."""
+        for a, b in zip(self._garis, self._garis[1:]):
+            rl.draw_line_3d(a, b, rl.DARKBLUE)
+        for q in self._penanda:
+            rl.draw_sphere_ex(q, 0.35, 6, 8, rl.GRAY)
+        for i, k in enumerate(self.K):
+            rl.draw_sphere_ex(v3(k), 0.8, 8, 10, rl.BLUE if i == 0 else rl.ORANGE)
+
+
+# ---------- Program mandiri ----------
+# [DOSEN] -> [AI] main() catmull_rom_p7.py dijadikan harness 3D: satu dt seperti di main.py, kamera orbit,
+#      HUD dari get_metrics() dan layar bantuan H. Pulau dan dermaga hanya pengganti world_scene.py.
+LEBAR, TINGGI = 1280, 720                 # px, target tugas 1280 x 720
+LANGIT = rl.Color(178, 214, 240, 255)     # sama dengan world_scene.py
+KAMERA_TARGET = np.array([0.0, 15.0, 0.0])
+KAMERA_R, KAMERA_H = 95.0, 40.0           # m, jarak mendatar dan tinggi kamera dari target
+KAMERA_PUTAR = 1.2                        # rad/s saat panah kiri/kanan ditahan
+BANTUAN = [("T", "arc-length <-> t seragam"), ("E", "ease-in/out on/off"),
+           ("[  ]", "putaran lebih lambat / cepat"), ("N", "(tahan) kawanan tiruan, uji D->A"),
+           ("<-  ->", "putar kamera"), ("P", "jeda"), ("R", "ulang dari dermaga"), ("H", "tutup bantuan")]
+
+def gambar_pulau():
+    """Lantai pulau (r 32 m, y = 0) dan dermaga timur (dek y = 1 m), supaya letak WP0 terbaca."""
+    rl.draw_cylinder(v3((0.0, -1.5, 0.0)), 32.0, 32.0, 1.5, 24, rl.Color(96, 140, 72, 255))
+    rl.draw_cylinder(v3((0.0, -20.0, 0.0)), 30.0, 0.0, 18.5, 24, rl.Color(122, 96, 70, 255))
+    rl.draw_cube(v3((35.5, 0.75, 0.0)), 11.0, 0.5, 8.0, WARNA_LAMBUNG)
+
+def gambar_kawanan_tiruan(kapal):
+    """Pengganti Modul D: 10 bola gelap di depan kapal selama N ditahan (hanya tampilan)."""
+    for i in range(BATAS_BOID):
+        q = kapal.pos + (9.0 + 2.0 * (i % 5)) * kapal.forward + (3.0 * (i // 5) - 1.5) * kapal.right
+        rl.draw_sphere_ex(v3(q), 0.6, 6, 8, rl.DARKGRAY)
+
+def gambar_hud(kapal, paused):
+    m = kapal.get_metrics()
+    baris = [f"Mode (T): {'arc-length' if m['mode_arc'] else 't seragam'}   Ease (E): {'ON' if m['ease'] else 'OFF'}",
+             f"Kecepatan: {m['ship_speed']:.2f} m/s   simpangan 2 s: {m['speed_sigma']:.1f} %",
+             f"Waktu putaran ([ ]): {kapal.t_lap:.1f} s   panjang rute: {m['path_length']:.1f} m",
+             f"t = {m['t']:.2f} / {len(kapal.K)}   s = {m['s']:.3f}",
+             f"Boid di depan (N): {m['boids_ahead']}   skala laju: {m['speed_scale']:.2f}",
+             f"update(): {m['step_ms']:.3f} ms" + ("   [JEDA]" if paused else "")]
+    rl.draw_rectangle(10, 10, 500, 46 + 24 * len(baris), rl.fade(rl.RAYWHITE, 0.85))
+    rl.draw_text("Modul A - kapal langit", 20, 18, 20, rl.DARKGRAY)
+    for i, teks in enumerate(baris):
+        rl.draw_text(teks, 20, 46 + 24 * i, 18, rl.DARKGRAY)
+    rl.draw_fps(LEBAR - 100, 16)
+    rl.draw_text("H = bantuan", 20, TINGGI - 28, 18, rl.GRAY)
+
+def gambar_bantuan():
+    x, y = LEBAR // 2 - 230, 200
+    rl.draw_rectangle(x, y, 460, 40 + 30 * len(BANTUAN), rl.fade(rl.BLACK, 0.75))
+    for i, (tombol, arti) in enumerate(BANTUAN):          # dua kolom, karena huruf raylib tidak sama lebar
+        rl.draw_text(tombol, x + 24, y + 22 + 30 * i, 20, rl.GOLD)
+        rl.draw_text(arti, x + 120, y + 22 + 30 * i, 20, rl.RAYWHITE)
+
+def main():
+    kapal = Skyship()
+    sudut, paused, bantuan = 0.6, False, False
+    rl.init_window(LEBAR, TINGGI, "Modul A - kapal langit (standalone)")
+    rl.set_target_fps(60)
+    cam = rl.Camera3D(v3(KAMERA_TARGET), v3(KAMERA_TARGET), rl.Vector3(0, 1, 0), 45.0, rl.CAMERA_PERSPECTIVE)
+    while not rl.window_should_close():
+        dt = min(rl.get_frame_time(), 1 / 30)       # satu dt untuk semua, dibatasi 1/30 s seperti main.py
+        kapal.handle_input()                        # T, E, [ ]
+        if rl.is_key_pressed(rl.KEY_P): paused = not paused
+        if rl.is_key_pressed(rl.KEY_R): kapal = Skyship()
+        if rl.is_key_pressed(rl.KEY_H): bantuan = not bantuan
+        sudut += (rl.is_key_down(rl.KEY_RIGHT) - rl.is_key_down(rl.KEY_LEFT)) * KAMERA_PUTAR * dt
+        cam.position = v3(KAMERA_TARGET + (KAMERA_R * np.sin(sudut), KAMERA_H, KAMERA_R * np.cos(sudut)))
+        # kawanan tiruan: selama N ditahan, seolah 10 boid ada di depan kapal (di main.py angka ini dari Modul D)
+        n_boid = BATAS_BOID if rl.is_key_down(rl.KEY_N) else 0
+        if not paused:
+            kapal.update(dt, n_boid)
+
+        rl.begin_drawing()
+        rl.clear_background(LANGIT)
+        rl.begin_mode_3d(cam)
+        gambar_pulau()
+        kapal.render_rute()
+        kapal.render_3d()
+        if n_boid:
+            gambar_kawanan_tiruan(kapal)
+        rl.end_mode_3d()
+        gambar_hud(kapal, paused)
+        if bantuan:
+            gambar_bantuan()
+        rl.end_drawing()
+    rl.close_window()
+
+if __name__ == "__main__":
+    main()
