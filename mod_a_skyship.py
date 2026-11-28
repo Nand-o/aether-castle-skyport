@@ -274,7 +274,8 @@ KAMERA_TARGET = np.array([0.0, 15.0, 0.0])
 KAMERA_R, KAMERA_H = 95.0, 40.0           # m, jarak mendatar dan tinggi kamera dari target
 KAMERA_PUTAR = 1.2                        # rad/s saat panah kiri/kanan ditahan
 BANTUAN = ["T        arc-length <-> t seragam", "E        ease-in/out on/off",
-           "[  ]     putaran lebih lambat / cepat", "<-  ->   putar kamera",
+           "[  ]     putaran lebih lambat / cepat", "N        (tahan) kawanan tiruan, uji D->A",
+           "<-  ->   putar kamera",
            "P        jeda", "R        ulang dari dermaga", "H        tutup bantuan"]
 
 def gambar_pulau():
@@ -283,13 +284,19 @@ def gambar_pulau():
     rl.draw_cylinder(v3((0.0, -20.0, 0.0)), 30.0, 0.0, 18.5, 24, rl.Color(122, 96, 70, 255))
     rl.draw_cube(v3((35.5, 0.75, 0.0)), 11.0, 0.5, 8.0, WARNA_LAMBUNG)
 
+def gambar_kawanan_tiruan(kapal):
+    """Pengganti Modul D: 10 bola gelap di depan kapal selama N ditahan (hanya tampilan)."""
+    for i in range(BATAS_BOID):
+        q = kapal.pos + (9.0 + 2.0 * (i % 5)) * kapal.forward + (3.0 * (i // 5) - 1.5) * kapal.right
+        rl.draw_sphere_ex(v3(q), 0.6, 6, 8, rl.DARKGRAY)
+
 def gambar_hud(kapal, paused):
     m = kapal.get_metrics()
     baris = [f"Mode (T): {'arc-length' if m['mode_arc'] else 't seragam'}   Ease (E): {'ON' if m['ease'] else 'OFF'}",
              f"Kecepatan: {m['ship_speed']:.2f} m/s   simpangan 2 s: {m['speed_sigma']:.1f} %",
              f"Waktu putaran ([ ]): {kapal.t_lap:.1f} s   panjang rute: {m['path_length']:.1f} m",
              f"t = {m['t']:.2f} / {len(kapal.K)}   s = {m['s']:.3f}",
-             f"Boid di depan: {m['boids_ahead']}   skala laju: {m['speed_scale']:.2f}",
+             f"Boid di depan (N): {m['boids_ahead']}   skala laju: {m['speed_scale']:.2f}",
              f"update(): {m['step_ms']:.3f} ms" + ("   [JEDA]" if paused else "")]
     rl.draw_rectangle(10, 10, 500, 46 + 24 * len(baris), rl.fade(rl.RAYWHITE, 0.85))
     rl.draw_text("Modul A - kapal langit", 20, 18, 20, rl.DARKGRAY)
@@ -318,8 +325,10 @@ def main():
         if rl.is_key_pressed(rl.KEY_H): bantuan = not bantuan
         sudut += (rl.is_key_down(rl.KEY_RIGHT) - rl.is_key_down(rl.KEY_LEFT)) * KAMERA_PUTAR * dt
         cam.position = v3(KAMERA_TARGET + (KAMERA_R * np.sin(sudut), KAMERA_H, KAMERA_R * np.cos(sudut)))
+        # kawanan tiruan: selama N ditahan, seolah 10 boid ada di depan kapal (di main.py angka ini dari Modul D)
+        n_boid = BATAS_BOID if rl.is_key_down(rl.KEY_N) else 0
         if not paused:
-            kapal.update(dt)
+            kapal.update(dt, n_boid)
 
         rl.begin_drawing()
         rl.clear_background(LANGIT)
@@ -327,6 +336,8 @@ def main():
         gambar_pulau()
         kapal.render_rute()
         kapal.render_3d()
+        if n_boid:
+            gambar_kawanan_tiruan(kapal)
         rl.end_mode_3d()
         gambar_hud(kapal, paused)
         if bantuan:
