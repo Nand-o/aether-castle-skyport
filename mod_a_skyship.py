@@ -114,6 +114,22 @@ _EASE = np.array([ease_parabola(x, EASE_T1, EASE_T2) for x in _TAU])
 def balik_ease(s):
     return float(np.interp(s, _EASE, _TAU))
 
+# ---------- Gambar ----------
+# [DOSEN] V() dari catmull_rom_p7.py, diubah ke 3D: titik NumPy (x, y, z) -> rl.Vector3
+def v3(p):
+    return rl.Vector3(float(p[0]), float(p[1]), float(p[2]))
+
+# [AI] warna dan segitiga dua sisi untuk kapal (bentuk dasar raylib saja, tanpa model 3D)
+WARNA_LAMBUNG = rl.Color(146, 104, 66, 255)    # kayu, sama dengan dermaga di world_scene.py
+WARNA_SAYAP = rl.Color(232, 222, 196, 255)     # kain layar
+WARNA_SIRIP = rl.Color(150, 58, 44, 255)       # merah atap kastil
+WARNA_LENTERA = rl.Color(255, 196, 64, 255)
+
+def segitiga_dua_sisi(a, b, c, warna):
+    """raylib hanya menggambar sisi depan segitiga, jadi digambar dua kali dengan urutan titik dibalik."""
+    rl.draw_triangle_3d(v3(a), v3(b), v3(c), warna)
+    rl.draw_triangle_3d(v3(a), v3(c), v3(b), warna)
+
 # [AI] kapal mengikuti pola game loop P7: waktu tau (0..1) -> parameter t -> posisi di jalur
 class Skyship:
     def __init__(self, waypoints=WAYPOINTS, t_lap=T_LAP):
@@ -213,3 +229,15 @@ class Skyship:
         """Keadaan kapal untuk modul lain (salinan, jadi aman dibaca)."""
         return {"pos": self.pos.copy(), "vel": self.vel.copy(), "forward": self.forward.copy(),
                 "radius": RADIUS_KAPAL}
+
+    # ---------- gambar (dipanggil di antara begin_mode_3d dan end_mode_3d) ----------
+    def render_3d(self):
+        """Lambung sepanjang forward, sayap sepanjang right, sirip ke arah up: arah hadap dan
+        kemiringan kapal langsung terbaca. Ujung sayap = RADIUS_KAPAL (4,5 m) dari pusat."""
+        p, f, r, u = self.pos, self.forward, self.right, self.up
+        rl.draw_cylinder_ex(v3(p - 4.0 * f), v3(p + 4.0 * f), 1.5, 0.6, 12, WARNA_LAMBUNG)   # buritan -> haluan
+        for sisi in (1.0, -1.0):                                                          # sayap kanan, kiri
+            segitiga_dua_sisi(p + 1.0 * f + sisi * r, p - 2.0 * f + sisi * r,
+                              p - 2.5 * f + sisi * RADIUS_KAPAL * r, WARNA_SAYAP)
+        segitiga_dua_sisi(p - 1.5 * f + u, p - 4.0 * f + u, p - 4.2 * f + 3.5 * u, WARNA_SIRIP)  # sirip ekor
+        rl.draw_sphere(v3(p + 4.4 * f), 0.45, WARNA_LENTERA)                               # lentera di haluan
