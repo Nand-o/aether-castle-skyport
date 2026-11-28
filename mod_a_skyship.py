@@ -3,11 +3,17 @@ Modul A - Kapal langit di jalur Catmull-Rom tertutup 3D (Aether Castle Skyport).
 Dasar: catmull_rom_p7.py (Pertemuan 7, kode dosen). Sebagian kode baru dibuat dengan bantuan
 asisten AI (Claude); fungsinya ditandai [AI] dan dicatat di tabel atribusi README.
 Rujukan: Parent, R. (2012). Computer Animation: Algorithms and Techniques, Bab 3 (Interpolating Values):
-         interpolasi spline, menghitung arc length, dan ease-in/ease-out.
+         interpolasi spline Catmull-Rom, menghitung arc length, kontrol kecepatan dan ease-in/ease-out,
+         serta orientasi sepanjang jalur (di sini: arah maju dari tangen + sumbu atas dunia).
 Integrator: kinematik (tau maju dt / t_lap, posisi dihitung langsung dari kurva).
 
-Jalankan:  pip install -r requirements.txt   lalu   python main.py
-           (harness 3D mandiri untuk modul ini menyusul)
+Urutan per frame:  waktu tau -> ease -> jarak s -> tabel arc-length -> parameter t -> posisi dan arah.
+Antarmuka untuk main.py:  Skyship.update(dt, n_boid_depan), handle_input(), render_3d(), render_rute(),
+                          get_metrics(), get_export_state() -> {"pos", "vel", "forward", "radius"}.
+
+Jalankan:  pip install -r requirements.txt   lalu   python mod_a_skyship.py
+Tombol:    T arc-length <-> t seragam, E ease on/off, [ ] waktu putaran, N (tahan) kawanan tiruan,
+           panah kiri/kanan kamera, P jeda, R ulang, H bantuan.
 """
 import time
 from collections import deque
