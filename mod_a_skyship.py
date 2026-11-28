@@ -151,6 +151,10 @@ class Skyship:
         self.kecepatan = 0.0                 # m/s
         self.simpangan_kecepatan = 0.0       # %, simpangan baku / rata-rata dalam JENDELA_SIGMA detik
         self._riwayat = deque()              # pasangan (dt, kecepatan) untuk simpangan
+        # titik garis rute dan penanda jarak sama, dihitung sekali di sini (bukan tiap frame)
+        n = len(self.K)
+        self._garis = [v3(titik_jalur(self.K, t)) for t in np.linspace(0.0, n, 400 + 1)]
+        self._penanda = [v3(titik_jalur(self.K, t_dari_s(self.ts, self.s_norm, i / 20))) for i in range(20)]
 
     def _arah(self, t):
         """Arah hadap = tangen kurva yang dinormalisasi (tetap terdefinisi walau kapal berhenti)."""
@@ -241,3 +245,13 @@ class Skyship:
                               p - 2.5 * f + sisi * RADIUS_KAPAL * r, WARNA_SAYAP)
         segitiga_dua_sisi(p - 1.5 * f + u, p - 4.0 * f + u, p - 4.2 * f + 3.5 * u, WARNA_SIRIP)  # sirip ekor
         rl.draw_sphere(v3(p + 4.4 * f), 0.45, WARNA_LENTERA)                               # lentera di haluan
+
+    def render_rute(self):
+        """Pola gambar P7 dalam 3D: garis kurva, titik kunci (WP0 = dermaga, biru), dan 20 penanda
+        berjarak sama (s = i/20, abu-abu). Penanda yang rapat sama rata menunjukkan tabel arc-length."""
+        for a, b in zip(self._garis, self._garis[1:]):
+            rl.draw_line_3d(a, b, rl.DARKBLUE)
+        for q in self._penanda:
+            rl.draw_sphere_ex(q, 0.35, 6, 8, rl.GRAY)
+        for i, k in enumerate(self.K):
+            rl.draw_sphere_ex(v3(k), 0.8, 8, 10, rl.BLUE if i == 0 else rl.ORANGE)
